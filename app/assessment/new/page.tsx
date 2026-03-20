@@ -27,21 +27,17 @@ interface FormData {
   // Step 2 – Registration
   is_registered: boolean | null;
   cipc_number: string;
+  has_bank_account_s2: boolean | null;
+  bank_name_s2: string;
   has_coa: boolean | null;
   coa_number: string;
-  has_health_cert: boolean | null;
-  health_cert_number: string;
-  owner_sa_citizen: boolean | null;
-  owner_valid_id: boolean | null;
-  owner_id_number: string;
 
   // Step 3 – Infrastructure
+  years_operating: string;
   structure_type: string;
-  has_electricity: boolean | null;
-  has_water: boolean | null;
-  has_sanitation: boolean | null;
-  trading_rooms: string;
-  floor_area: string;
+  store_size: string;
+  storage: string[];
+  products: string[];
 
   // Step 4 – Hygiene
   shop_clean: boolean | null;
@@ -95,11 +91,10 @@ const initialForm: FormData = {
   shop_name: '', owner_name: '', email: '', contact: '', address: '',
   municipality: '', ward_no: '', gps_lat: null, gps_lng: null,
   manual_lat: '', manual_lng: '',
-  is_registered: null, cipc_number: '', has_coa: null, coa_number: '',
-  has_health_cert: null, health_cert_number: '', owner_sa_citizen: null,
-  owner_valid_id: null, owner_id_number: '',
-  structure_type: '', has_electricity: null, has_water: null,
-  has_sanitation: null, trading_rooms: '', floor_area: '',
+  is_registered: null, cipc_number: '',
+  has_bank_account_s2: null, bank_name_s2: '',
+  has_coa: null, coa_number: '',
+  years_operating: '', structure_type: '', store_size: '', storage: [], products: [],
   shop_clean: null, food_off_floor: null, visible_pests: null,
   hand_wash_facility: null, protective_gear: null,
   food_within_expiry: null, correct_temp_storage: null,
@@ -139,10 +134,7 @@ function calculateScore(form: FormData): number {
   let score = 0;
   if (form.is_registered) score += 15;
   if (form.has_coa) score += 15;
-  if (form.has_health_cert) score += 10;
-  if (form.has_electricity) score += 5;
-  if (form.has_water) score += 5;
-  if (form.has_sanitation) score += 5;
+  if (form.has_bank_account_s2) score += 10;
   if (form.shop_clean) score += 5;
   if (form.food_off_floor) score += 5;
   if (form.food_within_expiry) score += 10;
@@ -152,6 +144,8 @@ function calculateScore(form: FormData): number {
   if (form.employs_staff) score += 5;
   if (form.has_bank_account) score += 5;
   if (form.interested_in_nef) score += 5;
+  if (form.storage.length > 0) score += 5;
+  if (form.products.length > 2) score += 5;
   return Math.min(score, 100);
 }
 
@@ -284,6 +278,94 @@ function SectionDivider({ label }: { label: string }) {
       <span className="text-xs font-semibold text-white/40 uppercase tracking-widest">{label}</span>
       <div className="flex-1 h-px bg-white/10" />
     </div>
+  );
+}
+
+// Dropdown that shows Yes / No — styled to match the dark card
+function YesNoDropdown({ value, onChange }: { value: boolean | null; onChange: (v: boolean) => void }) {
+  return (
+    <div className="relative">
+      <select
+        value={value === null ? '' : value ? 'yes' : 'no'}
+        onChange={(e) => onChange(e.target.value === 'yes')}
+        className="w-full px-4 py-3.5 bg-[#1a2744] border border-white/10 rounded-xl text-white text-sm appearance-none focus:outline-none focus:border-blue-500 cursor-pointer"
+      >
+        <option value="" disabled>Select...</option>
+        <option value="yes">Yes</option>
+        <option value="no">No</option>
+      </select>
+      <div className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-white/40">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </div>
+    </div>
+  );
+}
+
+// Row layout: label left, control right — used in Step 2
+function RegistrationRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-start gap-4 py-5 border-b border-white/5 last:border-0">
+      <div className="w-[38%] text-white font-semibold text-sm leading-snug pt-3">{label}</div>
+      <div className="flex-1">{children}</div>
+    </div>
+  );
+}
+
+// Single-select tile (type of structure, shop size)
+function TileButton({
+  label,
+  selected,
+  onClick,
+}: {
+  label: string;
+  selected: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`w-full px-4 py-3.5 rounded-xl border text-sm font-medium text-left transition-all ${
+        selected
+          ? 'border-blue-500 bg-blue-600/20 text-white'
+          : 'border-white/10 bg-white/5 text-white/50 hover:border-white/25 hover:text-white/75'
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
+// Multi-select tile (storage, products)
+function MultiTile({
+  label,
+  selected,
+  onClick,
+}: {
+  label: string;
+  selected: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`w-full px-4 py-3.5 rounded-xl border text-sm font-medium text-left transition-all ${
+        selected
+          ? 'border-teal-500 bg-teal-600/20 text-white'
+          : 'border-white/10 bg-white/5 text-white/50 hover:border-white/25 hover:text-white/75'
+      }`}
+    >
+      {label}
+    </button>
   );
 }
 
@@ -472,111 +554,155 @@ function Step1({ form, setForm, gpsLoading, gpsError, onGetLocation }: {
 }
 
 function Step2({ form, setForm }: { form: FormData; setForm: React.Dispatch<React.SetStateAction<FormData>> }) {
-  const yn = (field: keyof FormData) => (v: boolean) =>
-    setForm((p) => ({ ...p, [field]: v }));
   const f = (field: keyof FormData) => (v: string) =>
     setForm((p) => ({ ...p, [field]: v }));
 
   return (
-    <div className="space-y-5">
-      <div className="space-y-2">
-        <FieldLabel>Is the shop registered?</FieldLabel>
-        <YesNoToggle value={form.is_registered} onChange={yn('is_registered')} />
+    <div>
+      <RegistrationRow label="Registered with CIPC?">
+        <YesNoDropdown
+          value={form.is_registered}
+          onChange={(v) => setForm((p) => ({ ...p, is_registered: v }))}
+        />
         {form.is_registered === true && (
-          <div className="pt-1 pl-1">
-            <FieldLabel>CIPC Number</FieldLabel>
-            <TextInput value={form.cipc_number} onChange={f('cipc_number')} placeholder="e.g. 2024/123456/07" />
+          <div className="mt-3">
+            <TextInput
+              value={form.cipc_number}
+              onChange={f('cipc_number')}
+              placeholder="CIPC Registration Number"
+            />
           </div>
         )}
-      </div>
+      </RegistrationRow>
 
-      <div className="space-y-2">
-        <FieldLabel>Does the shop have a Certificate of Acceptability (CoA)?</FieldLabel>
-        <YesNoToggle value={form.has_coa} onChange={yn('has_coa')} />
+      <RegistrationRow label="Business bank account?">
+        <YesNoDropdown
+          value={form.has_bank_account_s2}
+          onChange={(v) => setForm((p) => ({ ...p, has_bank_account_s2: v }))}
+        />
+        {form.has_bank_account_s2 === true && (
+          <div className="mt-3">
+            <TextInput
+              value={form.bank_name_s2}
+              onChange={f('bank_name_s2')}
+              placeholder="Bank name"
+            />
+          </div>
+        )}
+      </RegistrationRow>
+
+      <RegistrationRow label="Municipal CoA for Food Handling?">
+        <YesNoDropdown
+          value={form.has_coa}
+          onChange={(v) => setForm((p) => ({ ...p, has_coa: v }))}
+        />
         {form.has_coa === true && (
-          <div className="pt-1 pl-1">
-            <FieldLabel>CoA Number</FieldLabel>
-            <TextInput value={form.coa_number} onChange={f('coa_number')} placeholder="CoA certificate number" />
+          <div className="mt-3">
+            <TextInput
+              value={form.coa_number}
+              onChange={f('coa_number')}
+              placeholder="CoA Certificate Number"
+            />
           </div>
         )}
-      </div>
-
-      <div className="space-y-2">
-        <FieldLabel>Does the shop have a health certificate?</FieldLabel>
-        <YesNoToggle value={form.has_health_cert} onChange={yn('has_health_cert')} />
-        {form.has_health_cert === true && (
-          <div className="pt-1 pl-1">
-            <FieldLabel>Certificate Number</FieldLabel>
-            <TextInput value={form.health_cert_number} onChange={f('health_cert_number')} placeholder="Health certificate number" />
-          </div>
-        )}
-      </div>
-
-      <div className="space-y-2">
-        <FieldLabel>Is the owner a South African citizen?</FieldLabel>
-        <YesNoToggle value={form.owner_sa_citizen} onChange={yn('owner_sa_citizen')} />
-      </div>
-
-      <div className="space-y-2">
-        <FieldLabel>Does the owner have a valid SA ID?</FieldLabel>
-        <YesNoToggle value={form.owner_valid_id} onChange={yn('owner_valid_id')} />
-        {form.owner_valid_id === true && (
-          <div className="pt-1 pl-1">
-            <FieldLabel>ID Number</FieldLabel>
-            <TextInput value={form.owner_id_number} onChange={f('owner_id_number')} placeholder="13-digit SA ID number" />
-          </div>
-        )}
-      </div>
+      </RegistrationRow>
     </div>
   );
 }
 
+const STRUCTURE_TYPES = ['Container', 'Temporary Structure', 'Stand-alone', 'Residential Property', 'Other'];
+const SHOP_SIZES = ['Small', 'Medium', 'Large'];
+const STORAGE_OPTIONS = ['Fridge', 'Freezer', 'Shelves', 'Other'];
+const PRODUCT_OPTIONS = [
+  'Groceries', 'Beverages', 'Snacks', 'Bread',
+  'Dairy', 'Fresh Produce', 'Cooked Food', 'Airtime', 'Other',
+];
+
 function Step3({ form, setForm }: { form: FormData; setForm: React.Dispatch<React.SetStateAction<FormData>> }) {
-  const yn = (field: keyof FormData) => (v: boolean) =>
-    setForm((p) => ({ ...p, [field]: v }));
   const f = (field: keyof FormData) => (v: string) =>
     setForm((p) => ({ ...p, [field]: v }));
 
+  function toggleMulti(field: 'storage' | 'products', value: string) {
+    setForm((p) => {
+      const current = p[field] as string[];
+      return {
+        ...p,
+        [field]: current.includes(value)
+          ? current.filter((v) => v !== value)
+          : [...current, value],
+      };
+    });
+  }
+
   return (
-    <div className="space-y-5">
-      <div className="space-y-2">
-        <FieldLabel>Type of structure</FieldLabel>
-        <SelectInput
-          value={form.structure_type}
-          onChange={f('structure_type')}
-          placeholder="Select structure type"
-          options={[
-            { label: 'Formal building', value: 'formal_building' },
-            { label: 'Container', value: 'container' },
-            { label: 'Informal structure', value: 'informal_structure' },
-            { label: 'Other', value: 'other' },
-          ]}
+    <div className="space-y-6">
+      {/* Years operating */}
+      <div>
+        <FieldLabel>Years operating</FieldLabel>
+        <TextInput
+          value={form.years_operating}
+          onChange={f('years_operating')}
+          placeholder="e.g. 3 years"
         />
       </div>
 
-      <div className="space-y-2">
-        <FieldLabel>Does the shop have electricity?</FieldLabel>
-        <YesNoToggle value={form.has_electricity} onChange={yn('has_electricity')} />
-      </div>
-
-      <div className="space-y-2">
-        <FieldLabel>Does the shop have running water?</FieldLabel>
-        <YesNoToggle value={form.has_water} onChange={yn('has_water')} />
-      </div>
-
-      <div className="space-y-2">
-        <FieldLabel>Does the shop have toilet/sanitation?</FieldLabel>
-        <YesNoToggle value={form.has_sanitation} onChange={yn('has_sanitation')} />
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <FieldLabel>Rooms used for trading</FieldLabel>
-          <TextInput value={form.trading_rooms} onChange={f('trading_rooms')} type="number" placeholder="e.g. 2" />
+      {/* Type of structure */}
+      <div>
+        <FieldLabel>Type of structure</FieldLabel>
+        <div className="grid grid-cols-2 gap-2.5 mt-1">
+          {STRUCTURE_TYPES.map((s) => (
+            <TileButton
+              key={s}
+              label={s}
+              selected={form.structure_type === s}
+              onClick={() => setForm((p) => ({ ...p, structure_type: s }))}
+            />
+          ))}
         </div>
-        <div>
-          <FieldLabel>Floor area (m²)</FieldLabel>
-          <TextInput value={form.floor_area} onChange={f('floor_area')} type="number" placeholder="e.g. 30" />
+      </div>
+
+      {/* Shop size */}
+      <div>
+        <FieldLabel>Shop size</FieldLabel>
+        <div className="grid grid-cols-3 gap-2.5 mt-1">
+          {SHOP_SIZES.map((s) => (
+            <TileButton
+              key={s}
+              label={s}
+              selected={form.store_size === s}
+              onClick={() => setForm((p) => ({ ...p, store_size: s }))}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Storage */}
+      <div>
+        <FieldLabel>Storage <span className="text-white/40 font-normal">(Select all that apply)</span></FieldLabel>
+        <div className="grid grid-cols-2 gap-2.5 mt-1">
+          {STORAGE_OPTIONS.map((s) => (
+            <MultiTile
+              key={s}
+              label={s}
+              selected={form.storage.includes(s)}
+              onClick={() => toggleMulti('storage', s)}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Products */}
+      <div>
+        <FieldLabel>Products <span className="text-white/40 font-normal">(Select all that apply)</span></FieldLabel>
+        <div className="grid grid-cols-2 gap-2.5 mt-1">
+          {PRODUCT_OPTIONS.map((s) => (
+            <MultiTile
+              key={s}
+              label={s}
+              selected={form.products.includes(s)}
+              onClick={() => toggleMulti('products', s)}
+            />
+          ))}
         </div>
       </div>
     </div>
@@ -822,10 +948,10 @@ function Step9({
     { label: 'GPS', value: form.gps_lat !== null ? `${form.gps_lat.toFixed(4)}, ${form.gps_lng?.toFixed(4)}` : '—' },
     { label: 'Registered', value: form.is_registered === null ? '—' : form.is_registered ? 'Yes' : 'No' },
     { label: 'Has CoA', value: form.has_coa === null ? '—' : form.has_coa ? 'Yes' : 'No' },
-    { label: 'Electricity', value: form.has_electricity === null ? '—' : form.has_electricity ? 'Yes' : 'No' },
-    { label: 'Water', value: form.has_water === null ? '—' : form.has_water ? 'Yes' : 'No' },
+    { label: 'Bank account', value: form.has_bank_account_s2 === null ? '—' : form.has_bank_account_s2 ? 'Yes' : 'No' },
+    { label: 'Structure', value: form.structure_type || '—' },
+    { label: 'Shop size', value: form.store_size || '—' },
     { label: 'Employs staff', value: form.employs_staff === null ? '—' : form.employs_staff ? `Yes (${form.num_employees || '?'})` : 'No' },
-    { label: 'Bank account', value: form.has_bank_account === null ? '—' : form.has_bank_account ? 'Yes' : 'No' },
     { label: 'NEF interest', value: form.interested_in_nef === null ? '—' : form.interested_in_nef ? 'Yes' : 'No' },
   ];
 
@@ -1070,20 +1196,16 @@ export default function AssessmentWizardPage() {
 
         is_registered: form.is_registered,
         cipc_number: form.cipc_number || null,
+        has_bank_account: form.has_bank_account_s2,
+        bank_name: form.bank_name_s2 || null,
         has_coa: form.has_coa,
         coa_number: form.coa_number || null,
-        has_health_cert: form.has_health_cert,
-        health_cert_number: form.health_cert_number || null,
-        owner_sa_citizen: form.owner_sa_citizen,
-        owner_valid_id: form.owner_valid_id,
-        owner_id_number: form.owner_id_number || null,
 
+        years_operating: form.years_operating || null,
         structure_type: form.structure_type || null,
-        has_electricity: form.has_electricity,
-        has_water: form.has_water,
-        has_sanitation: form.has_sanitation,
-        trading_rooms: form.trading_rooms ? parseInt(form.trading_rooms) : null,
-        floor_area: form.floor_area ? parseFloat(form.floor_area) : null,
+        store_size: form.store_size || null,
+        storage: form.storage.length > 0 ? form.storage : null,
+        products: form.products.length > 0 ? form.products : null,
 
         shop_clean: form.shop_clean,
         food_off_floor: form.food_off_floor,
