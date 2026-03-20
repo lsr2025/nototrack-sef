@@ -39,19 +39,20 @@ interface FormData {
   storage: string[];
   products: string[];
 
-  // Step 4 – Hygiene
-  shop_clean: boolean | null;
-  food_off_floor: boolean | null;
-  visible_pests: boolean | null;
-  hand_wash_facility: boolean | null;
-  protective_gear: boolean | null;
+  // Step 4 – General Hygiene
+  cleanliness_ok: boolean | null;
+  no_dust: boolean | null;
+  handwashing: boolean | null;
+  no_animals: boolean | null;
+  waste_ok: boolean | null;
+  hygiene_other: string;
 
   // Step 5 – Food Safety
-  food_within_expiry: boolean | null;
-  correct_temp_storage: boolean | null;
-  raw_cooked_separated: boolean | null;
-  prohibited_goods: boolean | null;
-  has_fridge: boolean | null;
+  food_on_floor: boolean | null;
+  expired_food: boolean | null;
+  food_labelled: boolean | null;
+  food_nonfood_separated: boolean | null;
+  food_safety_other: string;
 
   // Step 6 – Safety
   has_fire_extinguisher: boolean | null;
@@ -95,10 +96,10 @@ const initialForm: FormData = {
   has_bank_account_s2: null, bank_name_s2: '',
   has_coa: null, coa_number: '',
   years_operating: '', structure_type: '', store_size: '', storage: [], products: [],
-  shop_clean: null, food_off_floor: null, visible_pests: null,
-  hand_wash_facility: null, protective_gear: null,
-  food_within_expiry: null, correct_temp_storage: null,
-  raw_cooked_separated: null, prohibited_goods: null, has_fridge: null,
+  cleanliness_ok: null, no_dust: null, handwashing: null, no_animals: null,
+  waste_ok: null, hygiene_other: '',
+  food_on_floor: null, expired_food: null, food_labelled: null,
+  food_nonfood_separated: null, food_safety_other: '',
   has_fire_extinguisher: null, fire_extinguisher_date: '',
   has_emergency_exits: null, safe_electrical_wiring: null,
   chemicals_stored_safely: null,
@@ -135,10 +136,11 @@ function calculateScore(form: FormData): number {
   if (form.is_registered) score += 15;
   if (form.has_coa) score += 15;
   if (form.has_bank_account_s2) score += 10;
-  if (form.shop_clean) score += 5;
-  if (form.food_off_floor) score += 5;
-  if (form.food_within_expiry) score += 10;
-  if (form.correct_temp_storage) score += 5;
+  if (form.cleanliness_ok) score += 5;
+  if (form.waste_ok) score += 5;
+  if (!form.food_on_floor) score += 5;
+  if (!form.expired_food) score += 5;
+  if (form.food_labelled) score += 5;
   if (form.has_fire_extinguisher) score += 5;
   if (form.safe_electrical_wiring) score += 5;
   if (form.employs_staff) score += 5;
@@ -710,49 +712,72 @@ function Step3({ form, setForm }: { form: FormData; setForm: React.Dispatch<Reac
 }
 
 function Step4({ form, setForm }: { form: FormData; setForm: React.Dispatch<React.SetStateAction<FormData>> }) {
-  const yn = (field: keyof FormData) => (v: boolean) =>
+  const f = (field: keyof FormData) => (v: string) =>
     setForm((p) => ({ ...p, [field]: v }));
 
+  const rows: { field: keyof FormData; label: string }[] = [
+    { field: 'cleanliness_ok', label: 'Acceptable Overall Cleanliness' },
+    { field: 'no_dust', label: 'No Excessive Dust and/or Dirt on Surfaces' },
+    { field: 'handwashing', label: 'Hand-washing' },
+    { field: 'no_animals', label: 'Animals/Pets on Premises' },
+    { field: 'waste_ok', label: 'Acceptable Waste Usage' },
+  ];
+
   return (
-    <div className="space-y-5">
-      {(
-        [
-          { field: 'shop_clean', label: 'Is the shop clean and tidy?' },
-          { field: 'food_off_floor', label: 'Is food stored off the floor?' },
-          { field: 'visible_pests', label: 'Are there visible pests or rodents?' },
-          { field: 'hand_wash_facility', label: 'Is there a hand washing facility?' },
-          { field: 'protective_gear', label: 'Are food handlers wearing protective gear?' },
-        ] as { field: keyof FormData; label: string }[]
-      ).map(({ field, label }) => (
-        <div key={field} className="space-y-2">
-          <FieldLabel>{label}</FieldLabel>
-          <YesNoToggle value={form[field] as boolean | null} onChange={yn(field)} />
-        </div>
+    <div>
+      {rows.map(({ field, label }) => (
+        <RegistrationRow key={field} label={label}>
+          <YesNoDropdown
+            value={form[field] as boolean | null}
+            onChange={(v) => setForm((p) => ({ ...p, [field]: v }))}
+          />
+        </RegistrationRow>
       ))}
+
+      {/* Other (Specify) */}
+      <div className="pt-5">
+        <FieldLabel>Other (Specify)</FieldLabel>
+        <TextInput
+          value={form.hygiene_other}
+          onChange={f('hygiene_other')}
+          placeholder=""
+        />
+      </div>
     </div>
   );
 }
 
 function Step5({ form, setForm }: { form: FormData; setForm: React.Dispatch<React.SetStateAction<FormData>> }) {
-  const yn = (field: keyof FormData) => (v: boolean) =>
+  const f = (field: keyof FormData) => (v: string) =>
     setForm((p) => ({ ...p, [field]: v }));
 
+  const rows: { field: keyof FormData; label: string }[] = [
+    { field: 'food_on_floor', label: 'Food Stored Directly on Floor' },
+    { field: 'expired_food', label: 'Expired, Damaged, Dented Food Containers on Shelves' },
+    { field: 'food_labelled', label: 'Food Items Labelled within Expiry Date' },
+    { field: 'food_nonfood_separated', label: 'Food & non-food items stored separately' },
+  ];
+
   return (
-    <div className="space-y-5">
-      {(
-        [
-          { field: 'food_within_expiry', label: 'Are food products within expiry date?' },
-          { field: 'correct_temp_storage', label: 'Is food stored at correct temperatures?' },
-          { field: 'raw_cooked_separated', label: 'Are raw and cooked foods separated?' },
-          { field: 'prohibited_goods', label: 'Is the shop selling prohibited/counterfeit goods?' },
-          { field: 'has_fridge', label: 'Does the shop have a temperature-controlled fridge?' },
-        ] as { field: keyof FormData; label: string }[]
-      ).map(({ field, label }) => (
-        <div key={field} className="space-y-2">
-          <FieldLabel>{label}</FieldLabel>
-          <YesNoToggle value={form[field] as boolean | null} onChange={yn(field)} />
-        </div>
+    <div>
+      {rows.map(({ field, label }) => (
+        <RegistrationRow key={field} label={label}>
+          <YesNoDropdown
+            value={form[field] as boolean | null}
+            onChange={(v) => setForm((p) => ({ ...p, [field]: v }))}
+          />
+        </RegistrationRow>
       ))}
+
+      {/* Other (Specify) */}
+      <div className="pt-5">
+        <FieldLabel>Other (Specify)</FieldLabel>
+        <TextInput
+          value={form.food_safety_other}
+          onChange={f('food_safety_other')}
+          placeholder=""
+        />
+      </div>
     </div>
   );
 }
@@ -1207,17 +1232,18 @@ export default function AssessmentWizardPage() {
         storage: form.storage.length > 0 ? form.storage : null,
         products: form.products.length > 0 ? form.products : null,
 
-        shop_clean: form.shop_clean,
-        food_off_floor: form.food_off_floor,
-        visible_pests: form.visible_pests,
-        hand_wash_facility: form.hand_wash_facility,
-        protective_gear: form.protective_gear,
+        cleanliness_ok: form.cleanliness_ok,
+        no_dust: form.no_dust,
+        handwashing: form.handwashing,
+        no_animals: form.no_animals,
+        waste_ok: form.waste_ok,
+        hygiene_other: form.hygiene_other || null,
 
-        food_within_expiry: form.food_within_expiry,
-        correct_temp_storage: form.correct_temp_storage,
-        raw_cooked_separated: form.raw_cooked_separated,
-        prohibited_goods: form.prohibited_goods,
-        has_fridge: form.has_fridge,
+        food_on_floor: form.food_on_floor,
+        expired_food: form.expired_food,
+        food_labelled: form.food_labelled,
+        food_nonfood_separated: form.food_nonfood_separated,
+        food_safety_other: form.food_safety_other || null,
 
         has_fire_extinguisher: form.has_fire_extinguisher,
         fire_extinguisher_date: form.fire_extinguisher_date || null,
