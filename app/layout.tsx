@@ -2,12 +2,12 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'NotoTrack - YMS × IDC SEF',
-  description: 'Spaza Shop Profiling for Workstream A, Enterprise iLembe',
+  title: 'NotoTrack — YamiMine Solutions',
+  description: 'Spaza Shop Profiling & Analytics — YamiMine Solutions × IDC SEF',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
-    statusBarStyle: 'black-translucent',
+    statusBarStyle: 'default',
     title: 'NotoTrack',
   },
   formatDetection: {
@@ -31,14 +31,27 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        <meta name="theme-color" content="#0D7A6B" />
+        <meta name="theme-color" content="#2563EB" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="NotoTrack" />
         <link rel="apple-touch-icon" href="/icon-192.png" />
+        <link
+          rel="preconnect"
+          href="https://fonts.googleapis.com"
+        />
+        <link
+          rel="preconnect"
+          href="https://fonts.gstatic.com"
+          crossOrigin="anonymous"
+        />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+          rel="stylesheet"
+        />
       </head>
-      <body className="bg-dark text-white">{children}</body>
+      <body className="bg-background text-text-primary">{children}</body>
     </html>
   );
 }

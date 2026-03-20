@@ -1,189 +1,539 @@
 'use client';
 
-import { Suspense } from 'react';
-import { useEffect, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import Link from 'next/link';
+import { Suspense, useEffect, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase';
-import { BottomNav } from '@/components/BottomNav';
-import { OfflineBanner } from '@/components/OfflineBanner';
-import { Assessment } from '@/lib/types';
-import { getAssessments } from '@/lib/offline-db';
-import { getComplianceTier } from '@/lib/compliance';
+import { Sidebar } from '@/components/Sidebar';
+import { User, Assessment } from '@/lib/types';
 
-function SubmissionsContent() {
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface ShopRecord extends Assessment {
+  agent_name?: string;
+  agent_municipality?: string;
+  agent_locality?: string;
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function getTierInfo(tier: number | null | undefined): {
+  label: string;
+  riskLabel: string;
+  riskLevel: 'High' | 'Medium' | 'Low' | 'Unknown';
+  badgeColor: string;
+  riskBg: string;
+  riskText: string;
+} {
+  switch (tier) {
+    case 1:
+      return {
+        label: 'Tier 1 — Gold',
+        riskLabel: 'Low Risk',
+        riskLevel: 'Low',
+        badgeColor: 'bg-yellow-500',
+        riskBg: 'bg-green-900/40',
+        riskText: 'text-green-300',
+      };
+    case 2:
+      return {
+        label: 'Tier 2 — Good',
+        riskLabel: 'Low Risk',
+        riskLevel: 'Low',
+        badgeColor: 'bg-green-500',
+        riskBg: 'bg-green-900/40',
+        riskText: 'text-green-300',
+      };
+    case 3:
+      return {
+        label: 'Tier 3 — Partial',
+        riskLabel: 'Medium Risk',
+        riskLevel: 'Medium',
+        badgeColor: 'bg-orange-400',
+        riskBg: 'bg-orange-900/40',
+        riskText: 'text-orange-300',
+      };
+    case 4:
+      return {
+        label: 'Tier 4 — Risk',
+        riskLabel: 'High Risk',
+        riskLevel: 'High',
+        badgeColor: 'bg-red-500',
+        riskBg: 'bg-red-900/40',
+        riskText: 'text-red-300',
+      };
+    default:
+      return {
+        label: 'Unassessed',
+        riskLabel: 'Unknown',
+        riskLevel: 'Unknown',
+        badgeColor: 'bg-gray-500',
+        riskBg: 'bg-gray-700/40',
+        riskText: 'text-gray-400',
+      };
+  }
+}
+
+function getStatusInfo(status: string): { label: string; bg: string; text: string } {
+  switch (status) {
+    case 'synced':
+      return { label: 'Synced', bg: 'bg-green-900/40', text: 'text-green-300' };
+    case 'submitted':
+      return { label: 'Submitted', bg: 'bg-blue-900/40', text: 'text-blue-300' };
+    case 'pending_sync':
+      return { label: 'Pending', bg: 'bg-yellow-900/40', text: 'text-yellow-300' };
+    case 'draft':
+      return { label: 'Draft', bg: 'bg-gray-700/40', text: 'text-gray-400' };
+    case 'failed':
+      return { label: 'Failed', bg: 'bg-red-900/40', text: 'text-red-300' };
+    default:
+      return { label: status, bg: 'bg-gray-700/40', text: 'text-gray-400' };
+  }
+}
+
+function getInitials(name: string): string {
+  return name
+    .split(' ')
+    .map((p) => p[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+}
+
+// ─── Search Icon ──────────────────────────────────────────────────────────────
+
+function SearchIcon() {
+  return (
+    <svg
+      className="w-4 h-4 text-gray-400"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      viewBox="0 0 24 24"
+    >
+      <circle cx="11" cy="11" r="8" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </svg>
+  );
+}
+
+// ─── Shop Card ────────────────────────────────────────────────────────────────
+
+function ShopCard({ shop }: { shop: ShopRecord }) {
+  const tierInfo = getTierInfo(shop.compliance_tier);
+  const statusInfo = getStatusInfo(shop.status);
+  const agentInitials = shop.agent_name ? getInitials(shop.agent_name) : '?';
+
+  return (
+    <div className="bg-[#1A2D5A] rounded-2xl p-5 border border-white/10 hover:border-white/20 transition-all hover:shadow-lg hover:shadow-black/20 group">
+      {/* Top row */}
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex-1 min-w-0 pr-3">
+          <h3 className="font-bold text-[#0D7A6B] text-base leading-tight truncate group-hover:text-teal-400 transition-colors">
+            {shop.shop_name}
+          </h3>
+          {shop.owner_name && (
+            <p className="text-gray-400 text-xs mt-0.5">{shop.owner_name}</p>
+          )}
+        </div>
+        <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+          <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${statusInfo.bg} ${statusInfo.text}`}>
+            {statusInfo.label}
+          </span>
+          <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${tierInfo.riskBg} ${tierInfo.riskText}`}>
+            {tierInfo.riskLabel}
+          </span>
+        </div>
+      </div>
+
+      {/* Score bar */}
+      {shop.compliance_score !== undefined && shop.compliance_score !== null && (
+        <div className="mb-3">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs text-gray-400">Compliance Score</span>
+            <span className="text-xs font-bold text-white">{shop.compliance_score}%</span>
+          </div>
+          <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+            <div
+              className="h-full rounded-full transition-all"
+              style={{
+                width: `${shop.compliance_score}%`,
+                backgroundColor:
+                  shop.compliance_score >= 70
+                    ? '#10B981'
+                    : shop.compliance_score >= 40
+                    ? '#F59E0B'
+                    : '#EF4444',
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Details */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
+            <span className="text-white text-xs font-bold">{agentInitials}</span>
+          </div>
+          <div>
+            <p className="text-xs text-gray-300 font-medium">
+              {shop.agent_name || 'Unknown Agent'}
+            </p>
+            <p className="text-xs text-gray-500">
+              {shop.agent_locality || shop.address || 'No location'}
+            </p>
+          </div>
+        </div>
+        <div className="text-right">
+          <span
+            className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-md ${tierInfo.badgeColor} text-white`}
+          >
+            {shop.compliance_tier ? `T${shop.compliance_tier}` : 'N/A'}
+          </span>
+          <p className="text-xs text-gray-500 mt-0.5">
+            {shop.created_at
+              ? new Date(shop.created_at).toLocaleDateString('en-ZA', {
+                  month: 'short',
+                  day: 'numeric',
+                })
+              : '—'}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Shops Content ────────────────────────────────────────────────────────────
+
+const PAGE_SIZE = 20;
+
+function ShopsContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const supabase = createClient();
-  const [assessments, setAssessments] = useState<Assessment[]>([]);
+
+  const [user, setUser] = useState<User | null>(null);
+  const [shops, setShops] = useState<ShopRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const showSuccess = searchParams.get('success') === 'true';
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [page, setPage] = useState(0);
+
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('All Status');
+  const [municipalityFilter, setMunicipalityFilter] = useState('All Municipalities');
+  const [riskFilter, setRiskFilter] = useState('All Risk Levels');
+
+  const fetchShops = useCallback(
+    async (pageNum: number, replace: boolean) => {
+      try {
+        const from = pageNum * PAGE_SIZE;
+        const to = from + PAGE_SIZE - 1;
+
+        let query = supabase
+          .from('assessments')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .range(from, to);
+
+        if (statusFilter !== 'All Status') {
+          const statusMap: Record<string, string> = {
+            Compliant: 'synced',
+            Partial: 'submitted',
+            Pending: 'pending_sync',
+            Draft: 'draft',
+          };
+          query = query.eq('status', statusMap[statusFilter] || statusFilter.toLowerCase());
+        }
+
+        if (riskFilter !== 'All Risk Levels') {
+          const tierMap: Record<string, number[]> = {
+            Low: [1, 2],
+            Medium: [3],
+            High: [4],
+          };
+          const tiers = tierMap[riskFilter];
+          if (tiers) query = query.in('compliance_tier', tiers);
+        }
+
+        const { data, error } = await query;
+
+        if (error) {
+          console.error('Error fetching shops:', error);
+          return;
+        }
+
+        if (!data || data.length < PAGE_SIZE) setHasMore(false);
+
+        // Fetch agent names
+        const agentIds = [...new Set((data || []).map((r: { agent_id: string }) => r.agent_id))];
+        let nameMap: Record<string, { full_name: string; municipality: string; locality: string }> = {};
+        if (agentIds.length > 0) {
+          const { data: agentData } = await supabase
+            .from('users')
+            .select('id, full_name, municipality, locality')
+            .in('id', agentIds);
+          if (agentData) {
+            agentData.forEach((a: { id: string; full_name: string; municipality: string; locality: string }) => {
+              nameMap[a.id] = { full_name: a.full_name, municipality: a.municipality, locality: a.locality };
+            });
+          }
+        }
+
+        const mapped: ShopRecord[] = (data || []).map((r: Assessment) => ({
+          ...r,
+          agent_name: nameMap[r.agent_id]?.full_name,
+          agent_municipality: nameMap[r.agent_id]?.municipality,
+          agent_locality: nameMap[r.agent_id]?.locality,
+        }));
+
+        if (replace) {
+          setShops(mapped);
+        } else {
+          setShops((prev) => [...prev, ...mapped]);
+        }
+      } catch (err) {
+        console.error('Fetch error:', err);
+      }
+    },
+    [supabase, statusFilter, riskFilter]
+  );
 
   useEffect(() => {
-    loadAssessments();
-  }, []);
-
-  async function loadAssessments() {
-    try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
+    const init = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         router.push('/');
         return;
       }
-
-      // Get remote assessments
-      const { data: remoteData } = await supabase
-        .from('assessments')
+      const { data: userData } = await supabase
+        .from('users')
         .select('*')
-        .eq('agent_id', session.user.id)
-        .order('created_at', { ascending: false });
+        .eq('id', session.user.id)
+        .single();
+      if (userData) setUser(userData as User);
 
-      // Get local assessments
-      const localData = await getAssessments();
-
-      // Combine and deduplicate
-      const allAssessments = [
-        ...(remoteData || []),
-        ...localData.filter((a) => a.status !== 'synced'),
-      ];
-
-      // Remove duplicates (prefer synced versions)
-      const unique = allAssessments.reduce(
-        (acc, current) => {
-          const exists = acc.find((item) => item.offline_id === current.offline_id || item.id === current.id);
-          if (!exists) {
-            acc.push(current);
-          }
-          return acc;
-        },
-        [] as Assessment[]
-      );
-
-      setAssessments(unique as Assessment[]);
-    } catch (error) {
-      console.error('Error loading assessments:', error);
-    } finally {
+      setPage(0);
+      setHasMore(true);
+      setLoading(true);
+      await fetchShops(0, true);
       setLoading(false);
+    };
+    init();
+  }, [router, supabase, fetchShops]);
+
+  // Re-fetch when filters change
+  useEffect(() => {
+    if (!loading) {
+      setPage(0);
+      setHasMore(true);
+      fetchShops(0, true);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter, municipalityFilter, riskFilter]);
+
+  async function loadMore() {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    const nextPage = page + 1;
+    setPage(nextPage);
+    await fetchShops(nextPage, false);
+    setLoadingMore(false);
   }
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-dark flex items-center justify-center">
-        <div className="text-white">Loading...</div>
-      </div>
-    );
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    router.push('/');
   }
+
+  // Client-side search filter
+  const filtered = shops.filter((s) => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return (
+      s.shop_name?.toLowerCase().includes(q) ||
+      s.owner_name?.toLowerCase().includes(q) ||
+      s.agent_name?.toLowerCase().includes(q) ||
+      s.address?.toLowerCase().includes(q)
+    );
+  });
 
   return (
-    <main className="min-h-screen bg-dark pt-2 pb-24">
-      <OfflineBanner />
+    <div className="flex h-screen bg-background overflow-hidden">
+      <Sidebar activePage="shops" user={user} onLogout={handleLogout} />
 
-      {/* Header */}
-      <div className="px-4 py-6 border-b border-teal/20 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-white">Submissions</h1>
-        <Link href="/dashboard" className="text-teal hover:text-teal/80">
-          ← Back
-        </Link>
-      </div>
-
-      {/* Success message */}
-      {showSuccess && (
-        <div className="mx-4 mt-4 p-4 bg-green-600/20 border border-green-600/50 rounded-lg text-green-200">
-          ✓ Assessment submitted successfully!
-        </div>
-      )}
-
-      {/* Content */}
-      <div className="px-4 py-6">
-        {assessments.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-white/60 text-lg mb-4">No assessments yet</p>
-            <Link
-              href="/assessment/new"
-              className="inline-block px-6 py-3 bg-teal text-dark font-bold rounded-lg hover:bg-teal/90 transition"
+      <main className="flex-1 md:ml-64 overflow-y-auto">
+        {/* Header */}
+        <header className="bg-white border-b border-gray-100 px-6 py-4 sticky top-0 z-30">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <h1 className="text-xl font-bold text-gray-900">Shops</h1>
+              <p className="text-xs text-gray-400 mt-0.5">All assessed spaza shops</p>
+            </div>
+            <button
+              onClick={() => router.push('/assessment/new')}
+              className="flex items-center gap-2 bg-blue-600 text-white text-sm font-semibold px-4 py-2 rounded-xl hover:bg-blue-700 transition-colors"
             >
-              Create Your First Assessment
-            </Link>
+              <span className="text-base">+</span>
+              New Assessment
+            </button>
           </div>
-        ) : (
-          <div className="space-y-3">
-            {assessments.map((assessment) => {
-              const tier =
-                assessment.compliance_score !== undefined
-                  ? getComplianceTier(assessment.compliance_score)
-                  : null;
+        </header>
 
-              return (
+        <div className="p-6">
+          {/* Search + Filters bar */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-5">
+            <div className="flex flex-col sm:flex-row gap-3">
+              {/* Search */}
+              <div className="relative flex-1">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2">
+                  <SearchIcon />
+                </span>
+                <input
+                  type="text"
+                  placeholder="Search shops, owners, agents..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-xl bg-gray-50 text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-colors"
+                />
+              </div>
+
+              {/* Status filter */}
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="text-sm border border-gray-200 rounded-xl px-3 py-2 bg-white text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[140px]"
+              >
+                <option>All Status</option>
+                <option>Compliant</option>
+                <option>Partial</option>
+                <option>Pending</option>
+                <option>Draft</option>
+              </select>
+
+              {/* Municipality filter */}
+              <select
+                value={municipalityFilter}
+                onChange={(e) => setMunicipalityFilter(e.target.value)}
+                className="text-sm border border-gray-200 rounded-xl px-3 py-2 bg-white text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[180px]"
+              >
+                <option>All Municipalities</option>
+                <option>KwaDukuza</option>
+                <option>Mandeni</option>
+                <option>Maphumulo</option>
+                <option>Ndwedwe</option>
+              </select>
+
+              {/* Risk level filter */}
+              <select
+                value={riskFilter}
+                onChange={(e) => setRiskFilter(e.target.value)}
+                className="text-sm border border-gray-200 rounded-xl px-3 py-2 bg-white text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[150px]"
+              >
+                <option>All Risk Levels</option>
+                <option>Low</option>
+                <option>Medium</option>
+                <option>High</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Count */}
+          <p className="text-sm text-gray-500 mb-4 font-medium">
+            Showing{' '}
+            <span className="text-gray-900 font-bold">{filtered.length}</span>{' '}
+            {filtered.length === 1 ? 'shop' : 'shops'}
+            {search && (
+              <span className="text-gray-400">
+                {' '}for &ldquo;{search}&rdquo;
+              </span>
+            )}
+          </p>
+
+          {/* Loading skeleton */}
+          {loading && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+              {Array.from({ length: 6 }).map((_, i) => (
                 <div
-                  key={assessment.offline_id || assessment.id}
-                  className="bg-navy rounded-lg p-4 border border-white/10 hover:border-teal/50 transition"
+                  key={i}
+                  className="bg-[#1A2D5A] rounded-2xl p-5 border border-white/10 animate-pulse h-44"
+                />
+              ))}
+            </div>
+          )}
+
+          {/* Empty state */}
+          {!loading && filtered.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-24 text-center">
+              <span className="text-6xl mb-4">🏪</span>
+              <h3 className="text-lg font-bold text-gray-700 mb-2">No shops found</h3>
+              <p className="text-gray-400 text-sm max-w-xs">
+                {search
+                  ? `No results for "${search}". Try a different search term.`
+                  : 'No shops match your current filters. Try adjusting the filters above.'}
+              </p>
+              {search && (
+                <button
+                  onClick={() => setSearch('')}
+                  className="mt-4 text-blue-600 text-sm font-medium hover:underline"
                 >
-                  <div className="flex items-start justify-between mb-2">
-                    <div>
-                      <h3 className="font-bold text-white">{assessment.shop_name}</h3>
-                      <p className="text-white/60 text-xs mt-1">
-                        {assessment.created_at
-                          ? new Date(assessment.created_at).toLocaleDateString('en-ZA', {
-                              year: 'numeric',
-                              month: 'short',
-                              day: 'numeric',
-                            })
-                          : 'Draft'}
-                      </p>
-                    </div>
-                    <span
-                      className={`px-2 py-1 rounded text-xs font-medium ${
-                        assessment.status === 'synced'
-                          ? 'bg-green-600/20 text-green-300'
-                          : 'bg-yellow-600/20 text-yellow-300'
-                      }`}
-                    >
-                      {assessment.status === 'synced' ? '✓ Synced' : '⟳ Pending'}
-                    </span>
-                  </div>
+                  Clear search
+                </button>
+              )}
+            </div>
+          )}
 
-                  {assessment.compliance_score !== undefined && (
-                    <div className="flex items-center gap-3 mt-3 pt-3 border-t border-white/10">
-                      <div>
-                        <p className="text-2xl font-bold text-teal">
-                          {assessment.compliance_score}
-                        </p>
-                        <p className="text-xs text-white/60">Compliance Score</p>
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-xs font-semibold text-white/80">{tier?.label}</p>
-                        <p className="text-xs text-white/60">{tier?.description}</p>
-                      </div>
-                    </div>
-                  )}
+          {/* Grid */}
+          {!loading && filtered.length > 0 && (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                {filtered.map((shop) => (
+                  <ShopCard key={shop.id || shop.offline_id} shop={shop} />
+                ))}
+              </div>
 
-                  {assessment.owner_name && (
-                    <p className="text-xs text-white/60 mt-2">Owner: {assessment.owner_name}</p>
-                  )}
+              {/* Load more */}
+              {hasMore && !search && (
+                <div className="flex justify-center mt-8">
+                  <button
+                    onClick={loadMore}
+                    disabled={loadingMore}
+                    className="flex items-center gap-2 bg-white border border-gray-200 text-gray-600 text-sm font-semibold px-6 py-2.5 rounded-xl hover:bg-gray-50 disabled:opacity-50 transition-colors shadow-sm"
+                  >
+                    {loadingMore ? (
+                      <>
+                        <span className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                        Loading...
+                      </>
+                    ) : (
+                      'Load more shops'
+                    )}
+                  </button>
                 </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      <BottomNav />
-    </main>
+              )}
+            </>
+          )}
+        </div>
+      </main>
+    </div>
   );
 }
 
-export default function SubmissionsPage() {
+// ─── Page export ──────────────────────────────────────────────────────────────
+
+export default function ShopsPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-dark flex items-center justify-center">
-        <div className="text-white">Loading...</div>
-      </div>
-    }>
-      <SubmissionsContent />
+    <Suspense
+      fallback={
+        <div className="flex h-screen bg-background items-center justify-center">
+          <div className="flex flex-col items-center gap-4">
+            <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+            <p className="text-gray-500 text-sm">Loading shops...</p>
+          </div>
+        </div>
+      }
+    >
+      <ShopsContent />
     </Suspense>
   );
 }
