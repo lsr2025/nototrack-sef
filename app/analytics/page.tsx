@@ -34,15 +34,9 @@ interface AssessmentRow {
   compliance_score: number | null;
   compliance_tier: number | null;
   status: string;
-  created_at: string;
-  agent_id: string;
-}
-
-interface UserRow {
-  id: string;
-  full_name: string;
+  submitted_at: string;
+  fieldworker_name: string | null;
   municipality: string | null;
-  locality: string | null;
 }
 
 interface MonthlyBreakdown {
@@ -65,13 +59,21 @@ interface PieSlice {
 
 interface AgentPerformance {
   rank: number;
-  agent_id: string;
-  full_name: string;
+  fieldworker_name: string;
   municipality: string;
   assessments: number;
   avgScore: number;
   complianceRate: number;
   trend: 'up' | 'down' | 'neutral';
+}
+
+interface MunicipalityBreakdown {
+  municipality: string;
+  total: number;
+  compliant: number;
+  partial: number;
+  nonCompliant: number;
+  avgScore: number;
 }
 
 interface ReportCard {
@@ -286,6 +288,7 @@ export default function AnalyticsPage() {
   const [statusDistribution, setStatusDistribution] = useState<PieSlice[]>([]);
   const [riskDistribution, setRiskDistribution] = useState<PieSlice[]>([]);
   const [agentPerformance, setAgentPerformance] = useState<AgentPerformance[]>([]);
+  const [municipalityData, setMunicipalityData] = useState<MunicipalityBreakdown[]>([]);
 
   // Report card state
   const [reportDates, setReportDates] = useState<Record<number, { from: string; to: string }>>({
@@ -311,27 +314,13 @@ export default function AnalyticsPage() {
         .single();
       if (userData) setUser(userData as UserProfile);
 
-      // Fetch assessments (last 12 months)
-      const twelveMonthsAgo = new Date();
-      twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 11);
-      twelveMonthsAgo.setDate(1);
-      twelveMonthsAgo.setHours(0, 0, 0, 0);
-
+      // Fetch ALL assessments (no date filter — use submitted_at)
       const { data: assessments } = await supabase
         .from('assessments')
-        .select('id, compliance_score, compliance_tier, status, created_at, agent_id')
-        .gte('created_at', twelveMonthsAgo.toISOString())
-        .order('created_at', { ascending: true });
-
-      // Fetch all users for agent join
-      const { data: users } = await supabase
-        .from('users')
-        .select('id, full_name, municipality, locality');
+        .select('id, compliance_score, compliance_tier, status, submitted_at, fieldworker_name, municipality')
+        .order('submitted_at', { ascending: true });
 
       const assessmentList: AssessmentRow[] = (assessments ?? []) as AssessmentRow[];
-      const userList: UserRow[] = (users ?? []) as UserRow[];
-      const userMap: Record<string, UserRow> = {};
-      userList.forEach((u) => { userMap[u.id] = u; });
 
       // ── Monthly Compliance Breakdown ──────────────────────────────────────
       const months = getLastNMonths(12);
@@ -341,7 +330,8 @@ export default function AnalyticsPage() {
       });
 
       assessmentList.forEach((a) => {
-        const key = getMonthKey(a.created_at);
+        if (!a.submitted_at) return;
+        const key = getMonthKey(a.submitted_at);
         if (!monthBuckets[key]) return;
         const score = a.compliance_score ?? 0;
         if (score >= 70) monthBuckets[key].Compliant++;
@@ -351,7 +341,7 @@ export default function AnalyticsPage() {
 
       setMonthlyBreakdown(
         months.map((m) => ({
-          month: m.split(' ')[0], // short month label
+          month: m.split(' ')[0],
           Compliant: monthBuckets[m].Compliant,
           Partial: monthBuckets[m].Partial,
           'Non-Compliant': monthBuckets[m]['Non-Compliant'],
@@ -363,8 +353,8 @@ export default function AnalyticsPage() {
       months.forEach((m) => { scoreBuckets[m] = { total: 0, count: 0 }; });
 
       assessmentList.forEach((a) => {
-        if (a.compliance_score === null) return;
-        const key = getMonthKey(a.created_at);
+        if (a.compliance_score === null || !a.submitted_at) return;
+        const key = getMonthKey(a.submitted_at);
         if (!scoreBuckets[key]) return;
         scoreBuckets[key].total += a.compliance_score;
         scoreBuckets[key].count++;
@@ -392,71 +382,92 @@ export default function AnalyticsPage() {
       });
 
       setStatusDistribution([
-        { name: 'Compliant', value: compliantCount, color: '#10B981' },
-        { name: 'Partial', value: partialCount, color: '#F59E0B' },
-        { name: 'Pending / Non-Compliant', value: pendingCount, color: '#6B7280' },
+        { name: 'Compliant (≥70%)', value: compliantCount, color: '#10B981' },
+        { name: 'Partial (40–69%)', value: partialCount, color: '#F59E0B' },
+        { name: 'Non-Compliant (<40%)', value: pendingCount, color: '#EF4444' },
       ]);
 
-      // ── Risk Level Distribution ───────────────────────────────────────────
-      let lowRisk = 0;
-      let mediumRisk = 0;
-      let highRisk = 0;
-
-      assessmentList.forEach((a) => {
-        const score = a.compliance_score ?? -1;
-        if (score >= 70) lowRisk++;
-        else if (score >= 40) mediumRisk++;
-        else highRisk++;
-      });
+      // ── Risk Level Distribution (by tier) ────────────────────────────────
+      const t1 = assessmentList.filter((a) => a.compliance_tier === 1).length;
+      const t2 = assessmentList.filter((a) => a.compliance_tier === 2).length;
+      const t3 = assessmentList.filter((a) => a.compliance_tier === 3).length;
+      const t4 = assessmentList.filter((a) => a.compliance_tier === 4).length;
 
       setRiskDistribution([
-        { name: 'Low Risk', value: lowRisk, color: '#10B981' },
-        { name: 'Medium Risk', value: mediumRisk, color: '#F59E0B' },
-        { name: 'High Risk', value: highRisk, color: '#EF4444' },
+        { name: 'Tier 1 (90–100%)', value: t1, color: '#10B981' },
+        { name: 'Tier 2 (70–89%)', value: t2, color: '#3B82F6' },
+        { name: 'Tier 3 (50–69%)', value: t3, color: '#F59E0B' },
+        { name: 'Tier 4 (<50%)', value: t4, color: '#EF4444' },
       ]);
 
-      // ── Agent Performance ─────────────────────────────────────────────────
-      const agentMap: Record<string, { scores: number[]; total: number }> = {};
+      // ── Municipality Breakdown ────────────────────────────────────────────
+      const muniBuckets: Record<string, { scores: number[]; total: number }> = {};
+      assessmentList.forEach((a) => {
+        const m = a.municipality ?? 'Unknown';
+        if (!muniBuckets[m]) muniBuckets[m] = { scores: [], total: 0 };
+        muniBuckets[m].total++;
+        if (a.compliance_score !== null) muniBuckets[m].scores.push(a.compliance_score);
+      });
+
+      const muniList: MunicipalityBreakdown[] = Object.entries(muniBuckets)
+        .filter(([m]) => m !== 'Unknown')
+        .sort((a, b) => b[1].total - a[1].total)
+        .map(([municipality, data]) => {
+          const scores = data.scores;
+          const avgScore = scores.length > 0
+            ? Math.round(scores.reduce((s, v) => s + v, 0) / scores.length)
+            : 0;
+          return {
+            municipality,
+            total: data.total,
+            compliant: scores.filter((s) => s >= 70).length,
+            partial: scores.filter((s) => s >= 40 && s < 70).length,
+            nonCompliant: scores.filter((s) => s < 40).length,
+            avgScore,
+          };
+        });
+      setMunicipalityData(muniList);
+
+      // ── Fieldworker Performance ───────────────────────────────────────────
+      const fwMap: Record<string, { scores: number[]; total: number; municipalities: Set<string> }> = {};
 
       assessmentList.forEach((a) => {
-        if (!a.agent_id) return;
-        if (!agentMap[a.agent_id]) agentMap[a.agent_id] = { scores: [], total: 0 };
-        agentMap[a.agent_id].total++;
-        if (a.compliance_score !== null) agentMap[a.agent_id].scores.push(a.compliance_score);
+        const fw = a.fieldworker_name ?? 'Unknown';
+        if (!fwMap[fw]) fwMap[fw] = { scores: [], total: 0, municipalities: new Set() };
+        fwMap[fw].total++;
+        if (a.compliance_score !== null) fwMap[fw].scores.push(a.compliance_score);
+        if (a.municipality) fwMap[fw].municipalities.add(a.municipality);
       });
 
-      const agentEntries = Object.entries(agentMap)
+      const agentPerfList: AgentPerformance[] = Object.entries(fwMap)
+        .filter(([name]) => name !== 'Unknown')
         .sort((a, b) => b[1].total - a[1].total)
-        .slice(0, 10);
-
-      const agentPerfList: AgentPerformance[] = agentEntries.map(([agentId, data], index) => {
-        const u = userMap[agentId];
-        const avgScore = data.scores.length > 0
-          ? Math.round(data.scores.reduce((s, v) => s + v, 0) / data.scores.length)
-          : 0;
-        const complianceRate = data.scores.length > 0
-          ? Math.round((data.scores.filter((s) => s >= 70).length / data.scores.length) * 100)
-          : 0;
-        // Simple trend: compare first half vs second half of scores
-        const half = Math.floor(data.scores.length / 2);
-        let trend: 'up' | 'down' | 'neutral' = 'neutral';
-        if (half > 0) {
-          const firstHalf = data.scores.slice(0, half).reduce((s, v) => s + v, 0) / half;
-          const secondHalf = data.scores.slice(half).reduce((s, v) => s + v, 0) / (data.scores.length - half);
-          if (secondHalf > firstHalf + 2) trend = 'up';
-          else if (secondHalf < firstHalf - 2) trend = 'down';
-        }
-        return {
-          rank: index + 1,
-          agent_id: agentId,
-          full_name: u?.full_name ?? 'Unknown Agent',
-          municipality: u?.municipality ?? '—',
-          assessments: data.total,
-          avgScore,
-          complianceRate,
-          trend,
-        };
-      });
+        .slice(0, 10)
+        .map(([name, data], index) => {
+          const avgScore = data.scores.length > 0
+            ? Math.round(data.scores.reduce((s, v) => s + v, 0) / data.scores.length)
+            : 0;
+          const complianceRate = data.scores.length > 0
+            ? Math.round((data.scores.filter((s) => s >= 70).length / data.scores.length) * 100)
+            : 0;
+          const half = Math.floor(data.scores.length / 2);
+          let trend: 'up' | 'down' | 'neutral' = 'neutral';
+          if (half > 0) {
+            const firstHalf = data.scores.slice(0, half).reduce((s, v) => s + v, 0) / half;
+            const secondHalf = data.scores.slice(half).reduce((s, v) => s + v, 0) / (data.scores.length - half);
+            if (secondHalf > firstHalf + 2) trend = 'up';
+            else if (secondHalf < firstHalf - 2) trend = 'down';
+          }
+          return {
+            rank: index + 1,
+            fieldworker_name: name,
+            municipality: Array.from(data.municipalities).slice(0, 2).join(', ') || '—',
+            assessments: data.total,
+            avgScore,
+            complianceRate,
+            trend,
+          };
+        });
 
       setAgentPerformance(agentPerfList);
     } catch (err) {
@@ -710,12 +721,73 @@ export default function AnalyticsPage() {
             </div>
           </div>
 
-          {/* ── Row 3: Agent Performance Table ── */}
+          {/* ── Row 3: Municipality Breakdown ── */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+            <div className="mb-5">
+              <h2 className="text-base font-bold text-gray-900">Municipality Compliance Breakdown</h2>
+              <p className="text-xs text-gray-400 mt-0.5">Assessments and average score per municipality</p>
+            </div>
+            {municipalityData.length === 0 ? (
+              <EmptyChart label="No municipality data available" />
+            ) : (
+              <div className="space-y-3">
+                {municipalityData.map((m) => (
+                  <div key={m.municipality} className="flex items-center gap-4">
+                    <div className="w-28 text-sm font-medium text-gray-700 truncate flex-shrink-0">{m.municipality}</div>
+                    <div className="flex-1 flex rounded-full overflow-hidden h-5">
+                      {m.compliant > 0 && (
+                        <div
+                          className="bg-green-500 flex items-center justify-center text-white text-xs font-bold"
+                          style={{ width: `${(m.compliant / m.total) * 100}%` }}
+                        >
+                          {m.compliant > 5 ? m.compliant : ''}
+                        </div>
+                      )}
+                      {m.partial > 0 && (
+                        <div
+                          className="bg-amber-400 flex items-center justify-center text-white text-xs font-bold"
+                          style={{ width: `${(m.partial / m.total) * 100}%` }}
+                        >
+                          {m.partial > 5 ? m.partial : ''}
+                        </div>
+                      )}
+                      {m.nonCompliant > 0 && (
+                        <div
+                          className="bg-red-400 flex items-center justify-center text-white text-xs font-bold"
+                          style={{ width: `${(m.nonCompliant / m.total) * 100}%` }}
+                        >
+                          {m.nonCompliant > 5 ? m.nonCompliant : ''}
+                        </div>
+                      )}
+                    </div>
+                    <div className="w-20 text-right flex-shrink-0">
+                      <span className="text-sm font-bold text-gray-900">{m.avgScore}%</span>
+                      <span className="text-xs text-gray-400 ml-1">avg</span>
+                    </div>
+                    <div className="w-16 text-right flex-shrink-0 text-xs text-gray-400">{m.total} shops</div>
+                  </div>
+                ))}
+                <div className="flex items-center gap-4 mt-2 pt-2 border-t border-gray-100">
+                  <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                    <span className="w-3 h-3 rounded-full bg-green-500 inline-block" /> Compliant ≥70%
+                  </div>
+                  <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                    <span className="w-3 h-3 rounded-full bg-amber-400 inline-block" /> Partial 40–69%
+                  </div>
+                  <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                    <span className="w-3 h-3 rounded-full bg-red-400 inline-block" /> Non-Compliant &lt;40%
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* ── Row 4: Fieldworker Performance Table ── */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
             <div className="flex items-center justify-between mb-5">
               <div>
-                <h2 className="text-base font-bold text-gray-900">Agent Performance</h2>
-                <p className="text-xs text-gray-400 mt-0.5">Top 10 agents by assessment count — last 12 months</p>
+                <h2 className="text-base font-bold text-gray-900">Fieldworker Performance</h2>
+                <p className="text-xs text-gray-400 mt-0.5">Top 10 fieldworkers by assessment count</p>
               </div>
               <span className="text-xs bg-blue-50 text-blue-600 font-semibold px-2.5 py-1 rounded-full">
                 Top 10
@@ -730,7 +802,7 @@ export default function AnalyticsPage() {
                   <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
                   <path d="M16 3.13a4 4 0 0 1 0 7.75" />
                 </svg>
-                <p className="text-gray-400 text-sm">No agent data available yet</p>
+                <p className="text-gray-400 text-sm">No fieldworker data available yet</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -738,8 +810,8 @@ export default function AnalyticsPage() {
                   <thead>
                     <tr className="border-b border-gray-100">
                       <th className="text-left text-xs font-semibold text-gray-400 pb-3 pr-4 w-12">Rank</th>
-                      <th className="text-left text-xs font-semibold text-gray-400 pb-3 pr-4">Agent Name</th>
-                      <th className="text-left text-xs font-semibold text-gray-400 pb-3 pr-4">Municipality</th>
+                      <th className="text-left text-xs font-semibold text-gray-400 pb-3 pr-4">Fieldworker</th>
+                      <th className="text-left text-xs font-semibold text-gray-400 pb-3 pr-4">Municipalities</th>
                       <th className="text-left text-xs font-semibold text-gray-400 pb-3 pr-4">Assessments</th>
                       <th className="text-left text-xs font-semibold text-gray-400 pb-3 pr-4">Avg Score</th>
                       <th className="text-left text-xs font-semibold text-gray-400 pb-3 pr-4">Compliance Rate</th>
@@ -748,7 +820,7 @@ export default function AnalyticsPage() {
                   </thead>
                   <tbody className="divide-y divide-gray-50">
                     {agentPerformance.map((agent) => (
-                      <tr key={agent.agent_id} className="hover:bg-gray-50 transition-colors">
+                      <tr key={agent.fieldworker_name} className="hover:bg-gray-50 transition-colors">
                         <td className="py-3 pr-4">
                           <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold ${
                             agent.rank === 1
@@ -763,7 +835,7 @@ export default function AnalyticsPage() {
                           </span>
                         </td>
                         <td className="py-3 pr-4">
-                          <span className="font-semibold text-gray-900">{agent.full_name}</span>
+                          <span className="font-semibold text-gray-900">{agent.fieldworker_name}</span>
                         </td>
                         <td className="py-3 pr-4 text-gray-500 text-xs">{agent.municipality}</td>
                         <td className="py-3 pr-4 font-semibold text-gray-900">{agent.assessments}</td>

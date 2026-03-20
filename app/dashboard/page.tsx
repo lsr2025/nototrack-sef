@@ -253,11 +253,11 @@ export default function DashboardPage() {
         .from('assessments')
         .select('id', { count: 'exact', head: true });
 
-      // Today's assessments
+      // Today's assessments (use submitted_at — real field date)
       const { count: todayCount } = await supabase
         .from('assessments')
         .select('id', { count: 'exact', head: true })
-        .gte('created_at', todayStart);
+        .gte('submitted_at', todayStart);
 
       // Compliance scores
       const { data: scoreData } = await supabase
@@ -291,34 +291,40 @@ export default function DashboardPage() {
         compliantCount,
       });
 
-      // Trend data (last 30 days)
+      // Trend data (use submitted_at — all data, bucketed by day over last 60 days of activity)
       const { data: trendRaw } = await supabase
         .from('assessments')
-        .select('created_at, status')
-        .gte('created_at', thirtyDaysAgo)
-        .order('created_at', { ascending: true });
+        .select('submitted_at, status')
+        .not('submitted_at', 'is', null)
+        .order('submitted_at', { ascending: true });
 
-      if (trendRaw) {
+      if (trendRaw && trendRaw.length > 0) {
+        // Find the date range of actual data
+        const dates = trendRaw.map((r: { submitted_at: string }) => r.submitted_at.slice(0, 10)).sort();
+        const startDate = new Date(dates[0]);
+        const endDate = new Date(dates[dates.length - 1]);
         const buckets: Record<string, { assessments: number; synced: number }> = {};
-        // seed every day of last 30
-        for (let i = 29; i >= 0; i--) {
-          const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+        for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
           const key = d.toISOString().slice(0, 10);
           buckets[key] = { assessments: 0, synced: 0 };
         }
-        trendRaw.forEach((row: { created_at: string; status: string }) => {
-          const key = row.created_at.slice(0, 10);
+        trendRaw.forEach((row: { submitted_at: string; status: string }) => {
+          const key = row.submitted_at.slice(0, 10);
           if (buckets[key]) {
             buckets[key].assessments += 1;
             if (row.status === 'synced') buckets[key].synced += 1;
           }
         });
-        const trendPoints: TrendPoint[] = Object.entries(buckets).map(([date, val]) => ({
-          date: formatDate(date + 'T00:00:00'),
-          assessments: val.assessments,
-          synced: val.synced,
-        }));
-        setTrend(trendPoints);
+        // Show max last 30 data points for readability
+        const allPoints = Object.entries(buckets)
+          .filter(([, val]) => val.assessments > 0)
+          .slice(-30)
+          .map(([date, val]) => ({
+            date: formatDate(date + 'T00:00:00'),
+            assessments: val.assessments,
+            synced: val.synced,
+          }));
+        setTrend(allPoints);
       }
 
       // Tier breakdown
@@ -338,77 +344,53 @@ export default function DashboardPage() {
         setTierBreakdown(breakdown);
       }
 
-      // Recent assessments with agent join
+      // Recent assessments (use fieldworker_name directly)
       const { data: recentRaw } = await supabase
         .from('assessments')
-        .select('id, shop_name, agent_id, compliance_score, compliance_tier, status, created_at')
-        .order('created_at', { ascending: false })
+        .select('id, shop_name, fieldworker_name, compliance_score, compliance_tier, status, submitted_at')
+        .order('submitted_at', { ascending: false })
         .limit(5);
 
       if (recentRaw && recentRaw.length > 0) {
-        const agentIds = [...new Set(recentRaw.map((r: { agent_id: string }) => r.agent_id))];
-        const { data: agentNames } = await supabase
-          .from('users')
-          .select('id, full_name')
-          .in('id', agentIds);
-        const nameMap: Record<string, string> = {};
-        if (agentNames) {
-          agentNames.forEach((a: { id: string; full_name: string }) => {
-            nameMap[a.id] = a.full_name;
-          });
-        }
         setRecentAssessments(
-          recentRaw.map((r: { id: string; shop_name: string; agent_id: string; compliance_score: number | null; compliance_tier: number | null; status: string; created_at: string }) => ({
+          recentRaw.map((r: { id: string; shop_name: string; fieldworker_name: string | null; compliance_score: number | null; compliance_tier: number | null; status: string; submitted_at: string }) => ({
             id: r.id,
-            shop_name: r.shop_name,
-            agent_name: nameMap[r.agent_id] || 'Unknown',
+            shop_name: r.shop_name ?? 'Unknown Shop',
+            agent_name: r.fieldworker_name ?? 'Unknown',
             compliance_score: r.compliance_score,
             compliance_tier: r.compliance_tier,
             status: r.status,
-            created_at: r.created_at,
+            created_at: r.submitted_at,
           }))
         );
       }
 
-      // Agent leaderboard
+      // Fieldworker leaderboard (all time)
       const { data: allForAgents } = await supabase
         .from('assessments')
-        .select('agent_id, created_at')
-        .gte('created_at', thirtyDaysAgo);
+        .select('fieldworker_name, submitted_at')
+        .not('fieldworker_name', 'is', null);
 
       if (allForAgents) {
         const agentTotals: Record<string, { total: number; thisWeek: number }> = {};
-        allForAgents.forEach((row: { agent_id: string; created_at: string }) => {
-          if (!agentTotals[row.agent_id]) agentTotals[row.agent_id] = { total: 0, thisWeek: 0 };
-          agentTotals[row.agent_id].total++;
-          if (row.created_at >= weekAgo) agentTotals[row.agent_id].thisWeek++;
+        allForAgents.forEach((row: { fieldworker_name: string; submitted_at: string }) => {
+          const name = row.fieldworker_name;
+          if (!agentTotals[name]) agentTotals[name] = { total: 0, thisWeek: 0 };
+          agentTotals[name].total++;
+          if (row.submitted_at >= weekAgo) agentTotals[name].thisWeek++;
         });
 
-        const topAgentIds = Object.entries(agentTotals)
-          .sort((a, b) => b[1].total - a[1].total)
-          .slice(0, 5)
-          .map(([id]) => id);
-
-        if (topAgentIds.length > 0) {
-          const { data: topNames } = await supabase
-            .from('users')
-            .select('id, full_name')
-            .in('id', topAgentIds);
-          const topNameMap: Record<string, string> = {};
-          if (topNames) {
-            topNames.forEach((a: { id: string; full_name: string }) => {
-              topNameMap[a.id] = a.full_name;
-            });
-          }
-          setAgentLeaderboard(
-            topAgentIds.map((id) => ({
-              agent_id: id,
-              full_name: topNameMap[id] || 'Agent',
-              total: agentTotals[id].total,
-              thisWeek: agentTotals[id].thisWeek,
+        setAgentLeaderboard(
+          Object.entries(agentTotals)
+            .sort((a, b) => b[1].total - a[1].total)
+            .slice(0, 5)
+            .map(([name, data]) => ({
+              agent_id: name,
+              full_name: name,
+              total: data.total,
+              thisWeek: data.thisWeek,
             }))
-          );
-        }
+        );
       }
 
       setLastRefresh(new Date());

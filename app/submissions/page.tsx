@@ -233,7 +233,7 @@ function ShopsContent() {
         let query = supabase
           .from('assessments')
           .select('*')
-          .order('created_at', { ascending: false })
+          .order('submitted_at', { ascending: false })
           .range(from, to);
 
         if (statusFilter !== 'All Status') {
@@ -265,26 +265,11 @@ function ShopsContent() {
 
         if (!data || data.length < PAGE_SIZE) setHasMore(false);
 
-        // Fetch agent names
-        const agentIds = [...new Set((data || []).map((r: { agent_id: string }) => r.agent_id))];
-        let nameMap: Record<string, { full_name: string; municipality: string; locality: string }> = {};
-        if (agentIds.length > 0) {
-          const { data: agentData } = await supabase
-            .from('users')
-            .select('id, full_name, municipality, locality')
-            .in('id', agentIds);
-          if (agentData) {
-            agentData.forEach((a: { id: string; full_name: string; municipality: string; locality: string }) => {
-              nameMap[a.id] = { full_name: a.full_name, municipality: a.municipality, locality: a.locality };
-            });
-          }
-        }
-
         const mapped: ShopRecord[] = (data || []).map((r: Assessment) => ({
           ...r,
-          agent_name: nameMap[r.agent_id]?.full_name,
-          agent_municipality: nameMap[r.agent_id]?.municipality,
-          agent_locality: nameMap[r.agent_id]?.locality,
+          agent_name: (r as Assessment & { fieldworker_name?: string }).fieldworker_name ?? undefined,
+          agent_municipality: (r as Assessment & { municipality?: string }).municipality ?? undefined,
+          agent_locality: undefined,
         }));
 
         if (replace) {
