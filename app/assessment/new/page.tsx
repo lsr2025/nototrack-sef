@@ -54,23 +54,26 @@ interface FormData {
   food_nonfood_separated: boolean | null;
   food_safety_other: string;
 
-  // Step 6 – Safety
-  has_fire_extinguisher: boolean | null;
-  fire_extinguisher_date: string;
-  has_emergency_exits: boolean | null;
-  safe_electrical_wiring: boolean | null;
-  chemicals_stored_safely: boolean | null;
+  // Step 6 – General & Safety Requirements
+  lighting_ok: boolean | null;
+  floors_ok: boolean | null;
+  cleaning_materials: boolean | null;
+  safety_signage: boolean | null;
+  disability_accessible: boolean | null;
+  not_sleeping_space: boolean | null;
+  yms_observations: string;
 
-  // Step 7 – Business
-  employs_staff: boolean | null;
-  num_employees: string;
-  num_sa_employees: string;
+  // Step 7 – Business Development
+  payment_methods: string[];
+  has_pos: boolean | null;
+  ordering_methods: string[];
+  makes_deliveries: boolean | null;
+  click_collect: boolean | null;
+  collection_point: string[];
+  space_security: boolean | null;
   monthly_turnover: string;
-  has_bank_account: boolean | null;
-  bank_name: string;
-  account_type: string;
-  accepts_card: boolean | null;
-  sells_on_credit: boolean | null;
+  num_employees: string;
+  support_needed: string[];
 
   // Step 8 – NEF Eligibility
   previously_disadvantaged: boolean | null;
@@ -100,12 +103,12 @@ const initialForm: FormData = {
   waste_ok: null, hygiene_other: '',
   food_on_floor: null, expired_food: null, food_labelled: null,
   food_nonfood_separated: null, food_safety_other: '',
-  has_fire_extinguisher: null, fire_extinguisher_date: '',
-  has_emergency_exits: null, safe_electrical_wiring: null,
-  chemicals_stored_safely: null,
-  employs_staff: null, num_employees: '', num_sa_employees: '',
-  monthly_turnover: '', has_bank_account: null, bank_name: '',
-  account_type: '', accepts_card: null, sells_on_credit: null,
+  lighting_ok: null, floors_ok: null, cleaning_materials: null,
+  safety_signage: null, disability_accessible: null, not_sleeping_space: null,
+  yms_observations: '',
+  payment_methods: [], has_pos: null, ordering_methods: [], makes_deliveries: null,
+  click_collect: null, collection_point: [], space_security: null,
+  monthly_turnover: '', num_employees: '', support_needed: [],
   previously_disadvantaged: null, owner_is_woman: null, owner_is_youth: null,
   has_business_plan: null, received_govt_support: null,
   govt_support_program: '', interested_in_nef: null,
@@ -141,10 +144,10 @@ function calculateScore(form: FormData): number {
   if (!form.food_on_floor) score += 5;
   if (!form.expired_food) score += 5;
   if (form.food_labelled) score += 5;
-  if (form.has_fire_extinguisher) score += 5;
-  if (form.safe_electrical_wiring) score += 5;
-  if (form.employs_staff) score += 5;
-  if (form.has_bank_account) score += 5;
+  if (form.lighting_ok) score += 5;
+  if (form.floors_ok) score += 5;
+  if (form.safety_signage) score += 5;
+  if (form.payment_methods.length > 0) score += 5;
   if (form.interested_in_nef) score += 5;
   if (form.storage.length > 0) score += 5;
   if (form.products.length > 2) score += 5;
@@ -783,117 +786,187 @@ function Step5({ form, setForm }: { form: FormData; setForm: React.Dispatch<Reac
 }
 
 function Step6({ form, setForm }: { form: FormData; setForm: React.Dispatch<React.SetStateAction<FormData>> }) {
-  const yn = (field: keyof FormData) => (v: boolean) =>
-    setForm((p) => ({ ...p, [field]: v }));
   const f = (field: keyof FormData) => (v: string) =>
     setForm((p) => ({ ...p, [field]: v }));
 
+  const rows: { field: keyof FormData; label: string }[] = [
+    { field: 'lighting_ok', label: 'Acceptable Lighting & Ventilation' },
+    { field: 'floors_ok', label: 'Acceptable Floors, Walls & Ceiling' },
+    { field: 'cleaning_materials', label: 'Cleaning Materials on Site' },
+    { field: 'safety_signage', label: 'Safety Signage & Hazards' },
+    { field: 'disability_accessible', label: 'Disability Accessible' },
+    { field: 'not_sleeping_space', label: 'Shop not used for sleeping or living purposes' },
+  ];
+
   return (
-    <div className="space-y-5">
-      <div className="space-y-2">
-        <FieldLabel>Is there a fire extinguisher?</FieldLabel>
-        <YesNoToggle value={form.has_fire_extinguisher} onChange={yn('has_fire_extinguisher')} />
-        {form.has_fire_extinguisher === true && (
-          <div className="pt-1 pl-1">
-            <FieldLabel>Last service date</FieldLabel>
-            <TextInput value={form.fire_extinguisher_date} onChange={f('fire_extinguisher_date')} type="date" />
-          </div>
-        )}
-      </div>
+    <div>
+      {rows.map(({ field, label }) => (
+        <RegistrationRow key={field} label={label}>
+          <YesNoDropdown
+            value={form[field] as boolean | null}
+            onChange={(v) => setForm((p) => ({ ...p, [field]: v }))}
+          />
+        </RegistrationRow>
+      ))}
 
-      <div className="space-y-2">
-        <FieldLabel>Are there emergency exits?</FieldLabel>
-        <YesNoToggle value={form.has_emergency_exits} onChange={yn('has_emergency_exits')} />
-      </div>
-
-      <div className="space-y-2">
-        <FieldLabel>Is electrical wiring safe?</FieldLabel>
-        <YesNoToggle value={form.safe_electrical_wiring} onChange={yn('safe_electrical_wiring')} />
-      </div>
-
-      <div className="space-y-2">
-        <FieldLabel>Are dangerous chemicals stored safely?</FieldLabel>
-        <YesNoToggle value={form.chemicals_stored_safely} onChange={yn('chemicals_stored_safely')} />
+      {/* YMS Observations */}
+      <div className="pt-5">
+        <FieldLabel>YMS Observations</FieldLabel>
+        <TextareaInput
+          value={form.yms_observations}
+          onChange={f('yms_observations')}
+          placeholder="Field agent observations..."
+          rows={4}
+        />
       </div>
     </div>
   );
 }
 
+// ── Cyan section header used in Step 7 ───────────────────
+function SectionHeader({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-sm font-bold text-cyan-400 mt-6 mb-3">{children}</p>
+  );
+}
+
+const PAYMENT_OPTIONS = ['CASH', 'CARD', 'EFT', 'MOBILE'];
+const ORDER_OPTIONS = ['Cash & Carry', 'Local', 'Informal', 'Group buying'];
+const COLLECTION_OPTIONS = ['Medication', 'Govt parcels', 'E-commerce', 'No'];
+const TURNOVER_OPTIONS = ['<R5k', 'R5k–R10k', '>R10k'];
+const SUPPORT_OPTIONS = ['Registration', 'Banking', 'Food Safety', 'Equipment', 'POS'];
+
 function Step7({ form, setForm }: { form: FormData; setForm: React.Dispatch<React.SetStateAction<FormData>> }) {
-  const yn = (field: keyof FormData) => (v: boolean) =>
-    setForm((p) => ({ ...p, [field]: v }));
   const f = (field: keyof FormData) => (v: string) =>
     setForm((p) => ({ ...p, [field]: v }));
 
+  function toggleMulti(field: 'payment_methods' | 'ordering_methods' | 'collection_point' | 'support_needed', value: string) {
+    setForm((p) => {
+      const current = p[field] as string[];
+      return {
+        ...p,
+        [field]: current.includes(value)
+          ? current.filter((v) => v !== value)
+          : [...current, value],
+      };
+    });
+  }
+
   return (
-    <div className="space-y-5">
-      <div className="space-y-2">
-        <FieldLabel>Does the shop employ staff?</FieldLabel>
-        <YesNoToggle value={form.employs_staff} onChange={yn('employs_staff')} />
-        {form.employs_staff === true && (
-          <div className="grid grid-cols-2 gap-3 pt-1 pl-1">
-            <div>
-              <FieldLabel>Total employees</FieldLabel>
-              <TextInput value={form.num_employees} onChange={f('num_employees')} type="number" placeholder="0" />
-            </div>
-            <div>
-              <FieldLabel>SA citizens employed</FieldLabel>
-              <TextInput value={form.num_sa_employees} onChange={f('num_sa_employees')} type="number" placeholder="0" />
-            </div>
-          </div>
-        )}
+    <div>
+      {/* ── Section A ── */}
+      <SectionHeader>Section A: Digital &amp; Payment Systems</SectionHeader>
+
+      <div className="mb-5">
+        <FieldLabel>Payments</FieldLabel>
+        <div className="grid grid-cols-2 gap-2.5 mt-1">
+          {PAYMENT_OPTIONS.map((o) => (
+            <MultiTile
+              key={o}
+              label={o}
+              selected={form.payment_methods.includes(o)}
+              onClick={() => toggleMulti('payment_methods', o)}
+            />
+          ))}
+        </div>
       </div>
 
-      <div className="space-y-2">
-        <FieldLabel>Estimated monthly turnover</FieldLabel>
-        <SelectInput
-          value={form.monthly_turnover}
-          onChange={f('monthly_turnover')}
-          placeholder="Select range"
-          options={[
-            { label: 'Less than R5,000', value: '<R5k' },
-            { label: 'R5,000 – R20,000', value: 'R5k-R20k' },
-            { label: 'R20,000 – R50,000', value: 'R20k-R50k' },
-            { label: 'R50,000 – R100,000', value: 'R50k-R100k' },
-            { label: 'More than R100,000', value: '>R100k' },
-          ]}
+      <RegistrationRow label="Point Of Sale (POS) system?">
+        <YesNoDropdown
+          value={form.has_pos}
+          onChange={(v) => setForm((p) => ({ ...p, has_pos: v }))}
         />
+      </RegistrationRow>
+
+      {/* ── Section B ── */}
+      <SectionHeader>Section B: Ordering, Delivery &amp; Collection</SectionHeader>
+
+      <div className="mb-5">
+        <FieldLabel>Where do you order?</FieldLabel>
+        <div className="grid grid-cols-2 gap-2.5 mt-1">
+          {ORDER_OPTIONS.map((o) => (
+            <MultiTile
+              key={o}
+              label={o}
+              selected={form.ordering_methods.includes(o)}
+              onClick={() => toggleMulti('ordering_methods', o)}
+            />
+          ))}
+        </div>
       </div>
 
-      <div className="space-y-2">
-        <FieldLabel>Does the shop have a business bank account?</FieldLabel>
-        <YesNoToggle value={form.has_bank_account} onChange={yn('has_bank_account')} />
-        {form.has_bank_account === true && (
-          <div className="space-y-3 pt-1 pl-1">
-            <div>
-              <FieldLabel>Bank name</FieldLabel>
-              <TextInput value={form.bank_name} onChange={f('bank_name')} placeholder="e.g. Capitec, FNB, ABSA" />
-            </div>
-            <div>
-              <FieldLabel>Account type</FieldLabel>
-              <SelectInput
-                value={form.account_type}
-                onChange={f('account_type')}
-                placeholder="Select account type"
-                options={[
-                  { label: 'Cheque', value: 'cheque' },
-                  { label: 'Savings', value: 'savings' },
-                  { label: 'Business', value: 'business' },
-                ]}
-              />
-            </div>
-          </div>
-        )}
+      <RegistrationRow label="Do you make deliveries?">
+        <YesNoDropdown
+          value={form.makes_deliveries}
+          onChange={(v) => setForm((p) => ({ ...p, makes_deliveries: v }))}
+        />
+      </RegistrationRow>
+
+      <RegistrationRow label="Can customers order and collect?">
+        <YesNoDropdown
+          value={form.click_collect}
+          onChange={(v) => setForm((p) => ({ ...p, click_collect: v }))}
+        />
+      </RegistrationRow>
+
+      {/* ── Section C ── */}
+      <SectionHeader>Section C: Community Service Potential</SectionHeader>
+
+      <div className="mb-5">
+        <FieldLabel>Collection point for:</FieldLabel>
+        <div className="grid grid-cols-2 gap-2.5 mt-1">
+          {COLLECTION_OPTIONS.map((o) => (
+            <MultiTile
+              key={o}
+              label={o}
+              selected={form.collection_point.includes(o)}
+              onClick={() => toggleMulti('collection_point', o)}
+            />
+          ))}
+        </div>
       </div>
 
-      <div className="space-y-2">
-        <FieldLabel>Does the shop accept card payments?</FieldLabel>
-        <YesNoToggle value={form.accepts_card} onChange={yn('accepts_card')} />
+      <RegistrationRow label="Space & security adequate?">
+        <YesNoDropdown
+          value={form.space_security}
+          onChange={(v) => setForm((p) => ({ ...p, space_security: v }))}
+        />
+      </RegistrationRow>
+
+      {/* ── Section D ── */}
+      <SectionHeader>Section D: Business Activity &amp; Support Needs</SectionHeader>
+
+      <div className="mb-5">
+        <FieldLabel>Monthly turnover</FieldLabel>
+        <div className="grid grid-cols-3 gap-2.5 mt-1">
+          {TURNOVER_OPTIONS.map((o) => (
+            <TileButton
+              key={o}
+              label={o}
+              selected={form.monthly_turnover === o}
+              onClick={() => setForm((p) => ({ ...p, monthly_turnover: o }))}
+            />
+          ))}
+        </div>
       </div>
 
-      <div className="space-y-2">
-        <FieldLabel>Does the shop sell on credit?</FieldLabel>
-        <YesNoToggle value={form.sells_on_credit} onChange={yn('sells_on_credit')} />
+      <div className="mb-5">
+        <FieldLabel>No. of Employees</FieldLabel>
+        <TextInput value={form.num_employees} onChange={f('num_employees')} type="number" placeholder="" />
+      </div>
+
+      <div>
+        <FieldLabel>Support needed</FieldLabel>
+        <div className="grid grid-cols-2 gap-2.5 mt-1">
+          {SUPPORT_OPTIONS.map((o) => (
+            <MultiTile
+              key={o}
+              label={o}
+              selected={form.support_needed.includes(o)}
+              onClick={() => toggleMulti('support_needed', o)}
+            />
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -976,7 +1049,7 @@ function Step9({
     { label: 'Bank account', value: form.has_bank_account_s2 === null ? '—' : form.has_bank_account_s2 ? 'Yes' : 'No' },
     { label: 'Structure', value: form.structure_type || '—' },
     { label: 'Shop size', value: form.store_size || '—' },
-    { label: 'Employs staff', value: form.employs_staff === null ? '—' : form.employs_staff ? `Yes (${form.num_employees || '?'})` : 'No' },
+    { label: 'Employees', value: form.num_employees || '—' },
     { label: 'NEF interest', value: form.interested_in_nef === null ? '—' : form.interested_in_nef ? 'Yes' : 'No' },
   ];
 
@@ -1245,21 +1318,24 @@ export default function AssessmentWizardPage() {
         food_nonfood_separated: form.food_nonfood_separated,
         food_safety_other: form.food_safety_other || null,
 
-        has_fire_extinguisher: form.has_fire_extinguisher,
-        fire_extinguisher_date: form.fire_extinguisher_date || null,
-        has_emergency_exits: form.has_emergency_exits,
-        safe_electrical_wiring: form.safe_electrical_wiring,
-        chemicals_stored_safely: form.chemicals_stored_safely,
+        lighting_ok: form.lighting_ok,
+        floors_ok: form.floors_ok,
+        cleaning_materials: form.cleaning_materials,
+        safety_signage: form.safety_signage,
+        disability_accessible: form.disability_accessible,
+        not_sleeping_space: form.not_sleeping_space,
+        yms_observations: form.yms_observations || null,
 
-        employs_staff: form.employs_staff,
-        num_employees: form.num_employees ? parseInt(form.num_employees) : null,
-        num_sa_employees: form.num_sa_employees ? parseInt(form.num_sa_employees) : null,
+        payment_methods: form.payment_methods,
+        has_pos: form.has_pos,
+        ordering_methods: form.ordering_methods,
+        makes_deliveries: form.makes_deliveries,
+        click_collect: form.click_collect,
+        collection_point: form.collection_point,
+        space_security: form.space_security,
         monthly_turnover: form.monthly_turnover || null,
-        has_bank_account: form.has_bank_account,
-        bank_name: form.bank_name || null,
-        account_type: form.account_type || null,
-        accepts_card: form.accepts_card,
-        sells_on_credit: form.sells_on_credit,
+        num_employees: form.num_employees ? parseInt(form.num_employees) : null,
+        support_needed: form.support_needed,
 
         previously_disadvantaged: form.previously_disadvantaged,
         owner_is_woman: form.owner_is_woman,
