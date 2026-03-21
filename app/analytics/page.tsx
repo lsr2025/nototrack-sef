@@ -516,7 +516,7 @@ export default function AnalyticsPage() {
       <Sidebar activePage="analytics" user={user} onLogout={handleLogout} />
 
       {/* Main content */}
-      <main className="flex-1 md:ml-64 overflow-y-auto">
+      <main className="flex-1 md:ml-64 overflow-y-auto pt-16 md:pt-0">
         {/* ── Sticky header ── */}
         <header className="bg-white border-b border-gray-100 px-6 py-4 sticky top-0 z-30">
           <div className="flex items-center justify-between">

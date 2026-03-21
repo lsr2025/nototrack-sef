@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase';
-import { BottomNav } from '@/components/BottomNav';
+import { Sidebar } from '@/components/Sidebar';
 import { OfflineBanner } from '@/components/OfflineBanner';
 import { User } from '@/lib/types';
 import { getPendingCount } from '@/lib/offline-db';
@@ -72,7 +72,9 @@ export default function ProfilePage() {
   };
 
   return (
-    <main className="min-h-screen bg-dark pt-2 pb-24">
+    <div className="flex min-h-screen bg-dark">
+      <Sidebar activePage="hr" user={user ? { full_name: user.full_name, role: user.role } : null} onLogout={handleSignOut} />
+      <main className="flex-1 md:ml-64 pt-16 md:pt-2 pb-24 overflow-y-auto">
       <OfflineBanner />
 
       {/* Header */}
@@ -143,8 +145,8 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      <BottomNav />
-    </main>
+      </main>
+    </div>
   );
 }
 

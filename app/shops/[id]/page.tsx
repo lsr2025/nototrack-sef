@@ -266,7 +266,7 @@ export default function ShopProfilePage() {
     <div className="flex min-h-screen bg-[#e8ecf1]">
       <Sidebar activePage="shops" user={user} onLogout={handleLogout} />
 
-      <main className="flex-1 md:ml-64 pt-6 md:p-6 pb-24 lg:pb-8 px-4">
+      <main className="flex-1 md:ml-64 pt-20 md:pt-6 md:p-6 pb-24 lg:pb-8 px-4">
         <div className="max-w-2xl mx-auto">
 
           {/* ── Page Header ── */}

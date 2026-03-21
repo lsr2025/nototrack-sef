@@ -352,7 +352,7 @@ function ShopsContent() {
     <div className="flex h-screen bg-background overflow-hidden">
       <Sidebar activePage="shops" user={user} onLogout={handleLogout} />
 
-      <main className="flex-1 md:ml-64 overflow-y-auto">
+      <main className="flex-1 md:ml-64 overflow-y-auto pt-16 md:pt-0">
         {/* Header */}
         <header className="bg-white border-b border-gray-100 px-6 py-4 sticky top-0 z-30">
           <div className="flex items-center justify-between flex-wrap gap-3">
