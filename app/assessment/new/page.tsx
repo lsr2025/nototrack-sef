@@ -75,14 +75,17 @@ interface FormData {
   num_employees: string;
   support_needed: string[];
 
-  // Step 8 – NEF Eligibility
-  previously_disadvantaged: boolean | null;
-  owner_is_woman: boolean | null;
-  owner_is_youth: boolean | null;
-  has_business_plan: boolean | null;
-  received_govt_support: boolean | null;
-  govt_support_program: string;
-  interested_in_nef: boolean | null;
+  // Step 8 – NEF Eligibility (Section E)
+  sa_citizen: boolean | null;
+  registered_cipc_nef: boolean | null;
+  willing_bank_nef: boolean | null;
+  willing_sars: boolean | null;
+  valid_coa_nef: boolean | null;
+  fixed_structure: boolean | null;
+  in_operation_6m: boolean | null;
+  hygiene_compliant: boolean | null;
+  willing_training: boolean | null;
+  growth_potential: boolean | null;
 
   // Step 9 – Photos
   photo_front: File | null;
@@ -109,9 +112,10 @@ const initialForm: FormData = {
   payment_methods: [], has_pos: null, ordering_methods: [], makes_deliveries: null,
   click_collect: null, collection_point: [], space_security: null,
   monthly_turnover: '', num_employees: '', support_needed: [],
-  previously_disadvantaged: null, owner_is_woman: null, owner_is_youth: null,
-  has_business_plan: null, received_govt_support: null,
-  govt_support_program: '', interested_in_nef: null,
+  sa_citizen: null, registered_cipc_nef: null, willing_bank_nef: null,
+  willing_sars: null, valid_coa_nef: null, fixed_structure: null,
+  in_operation_6m: null, hygiene_compliant: null, willing_training: null,
+  growth_potential: null,
   photo_front: null, photo_interior: null, photo_id_doc: null,
   additional_notes: '',
 };
@@ -148,7 +152,7 @@ function calculateScore(form: FormData): number {
   if (form.floors_ok) score += 5;
   if (form.safety_signage) score += 5;
   if (form.payment_methods.length > 0) score += 5;
-  if (form.interested_in_nef) score += 5;
+  if (form.growth_potential) score += 5;
   if (form.storage.length > 0) score += 5;
   if (form.products.length > 2) score += 5;
   return Math.min(score, 100);
@@ -973,47 +977,44 @@ function Step7({ form, setForm }: { form: FormData; setForm: React.Dispatch<Reac
 }
 
 function Step8({ form, setForm }: { form: FormData; setForm: React.Dispatch<React.SetStateAction<FormData>> }) {
-  const yn = (field: keyof FormData) => (v: boolean) =>
-    setForm((p) => ({ ...p, [field]: v }));
-  const f = (field: keyof FormData) => (v: string) =>
-    setForm((p) => ({ ...p, [field]: v }));
+  const rows: { field: keyof FormData; label: string }[] = [
+    { field: 'sa_citizen',        label: 'South African citizen with valid ID' },
+    { field: 'registered_cipc_nef', label: 'Registered business with CIPC' },
+    { field: 'willing_bank_nef',  label: 'Business bank account (or willing to open one)' },
+    { field: 'willing_sars',      label: 'SARS Tax Number (or willing to register)' },
+    { field: 'valid_coa_nef',     label: 'Valid Municipal COA for food handling' },
+    { field: 'fixed_structure',   label: 'Operates from a fixed structure' },
+    { field: 'in_operation_6m',   label: 'In operation for at least 6 months' },
+    { field: 'hygiene_compliant', label: 'Comply with basic hygiene standards' },
+    { field: 'willing_training',  label: 'Willing to participate in training/support' },
+    { field: 'growth_potential',  label: 'Demonstrates potential to sustain and grow' },
+  ];
 
   return (
-    <div className="space-y-5">
-      <div className="space-y-2">
-        <FieldLabel>Is the owner previously disadvantaged?</FieldLabel>
-        <YesNoToggle value={form.previously_disadvantaged} onChange={yn('previously_disadvantaged')} />
+    <div>
+      {/* Section header */}
+      <div className="flex flex-col items-center gap-3 pb-6">
+        <svg className="w-10 h-10 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="8" r="6" />
+          <path d="M8.56 2.75c.56 1.31 1 3.13.44 4.84a3.75 3.75 0 0 1-7 0c-.56-1.71-.12-3.53.44-4.84" />
+          <path d="M15.44 2.75c-.56 1.31-1 3.13-.44 4.84a3.75 3.75 0 0 0 7 0c.56-1.71.12-3.53-.44-4.84" />
+          <path d="M9 12v9" />
+          <path d="M15 12v9" />
+          <path d="M9 16h6" />
+        </svg>
+        <h2 className="text-white font-semibold text-lg text-center">Section E: Spaza Shop NEF Grant Eligibility</h2>
       </div>
 
-      <div className="space-y-2">
-        <FieldLabel>Is the owner a woman?</FieldLabel>
-        <YesNoToggle value={form.owner_is_woman} onChange={yn('owner_is_woman')} />
-      </div>
-
-      <div className="space-y-2">
-        <FieldLabel>Is the owner a youth (under 35)?</FieldLabel>
-        <YesNoToggle value={form.owner_is_youth} onChange={yn('owner_is_youth')} />
-      </div>
-
-      <div className="space-y-2">
-        <FieldLabel>Does the business have a business plan?</FieldLabel>
-        <YesNoToggle value={form.has_business_plan} onChange={yn('has_business_plan')} />
-      </div>
-
-      <div className="space-y-2">
-        <FieldLabel>Has the owner received any government support?</FieldLabel>
-        <YesNoToggle value={form.received_govt_support} onChange={yn('received_govt_support')} />
-        {form.received_govt_support === true && (
-          <div className="pt-1 pl-1">
-            <FieldLabel>Program name</FieldLabel>
-            <TextInput value={form.govt_support_program} onChange={f('govt_support_program')} placeholder="e.g. SEDA, DTI, NYDA" />
-          </div>
-        )}
-      </div>
-
-      <div className="space-y-2">
-        <FieldLabel>Is the owner interested in NEF funding?</FieldLabel>
-        <YesNoToggle value={form.interested_in_nef} onChange={yn('interested_in_nef')} />
+      {/* Criteria rows */}
+      <div className="divide-y divide-white/5">
+        {rows.map(({ field, label }) => (
+          <RegistrationRow key={field} label={label}>
+            <YesNoDropdown
+              value={form[field] as boolean | null}
+              onChange={(v) => setForm((p) => ({ ...p, [field]: v }))}
+            />
+          </RegistrationRow>
+        ))}
       </div>
     </div>
   );
@@ -1050,7 +1051,8 @@ function Step9({
     { label: 'Structure', value: form.structure_type || '—' },
     { label: 'Shop size', value: form.store_size || '—' },
     { label: 'Employees', value: form.num_employees || '—' },
-    { label: 'NEF interest', value: form.interested_in_nef === null ? '—' : form.interested_in_nef ? 'Yes' : 'No' },
+    { label: 'SA Citizen', value: form.sa_citizen === null ? '—' : form.sa_citizen ? 'Yes' : 'No' },
+    { label: 'Growth Potential', value: form.growth_potential === null ? '—' : form.growth_potential ? 'Yes' : 'No' },
   ];
 
   return (
@@ -1337,18 +1339,27 @@ export default function AssessmentWizardPage() {
         num_employees: form.num_employees ? parseInt(form.num_employees) : null,
         support_needed: form.support_needed,
 
-        previously_disadvantaged: form.previously_disadvantaged,
-        owner_is_woman: form.owner_is_woman,
-        owner_is_youth: form.owner_is_youth,
-        has_business_plan: form.has_business_plan,
-        received_govt_support: form.received_govt_support,
-        govt_support_program: form.govt_support_program || null,
-        interested_in_nef: form.interested_in_nef,
+        sa_citizen: form.sa_citizen,
+        registered_cipc_nef: form.registered_cipc_nef,
+        willing_bank: form.willing_bank_nef,
+        willing_sars: form.willing_sars,
+        valid_coa_nef: form.valid_coa_nef,
+        fixed_structure: form.fixed_structure,
+        in_operation_6m: form.in_operation_6m,
+        hygiene_compliant: form.hygiene_compliant,
+        willing_training: form.willing_training,
+        growth_potential: form.growth_potential,
 
         additional_notes: form.additional_notes || null,
 
         compliance_score: score,
         compliance_tier: tier.tier,
+        nef_score: [
+          form.sa_citizen, form.registered_cipc_nef, form.willing_bank_nef,
+          form.willing_sars, form.valid_coa_nef, form.fixed_structure,
+          form.in_operation_6m, form.hygiene_compliant, form.willing_training,
+          form.growth_potential,
+        ].filter(Boolean).length,
         status: 'submitted',
         created_at: new Date().toISOString(),
         synced_at: new Date().toISOString(),
