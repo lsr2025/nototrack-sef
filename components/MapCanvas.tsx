@@ -1,9 +1,7 @@
 'use client';
 
-import { useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, CircleMarker, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, CircleMarker } from 'react-leaflet';
 import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
 import { useRouter } from 'next/navigation';
 import { Store, ExternalLink } from 'lucide-react';
 
