@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase';
 import { Sidebar } from '@/components/Sidebar';
+import { AppFooter } from '@/components/AppFooter';
 import { User, Assessment } from '@/lib/types';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -499,6 +500,7 @@ function ShopsContent() {
             </>
           )}
         </div>
+        <AppFooter />
       </main>
     </div>
   );

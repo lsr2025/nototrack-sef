@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase';
 import { Sidebar } from '@/components/Sidebar';
+import { AppFooter } from '@/components/AppFooter';
 import {
   BarChart,
   Bar,
@@ -945,6 +946,7 @@ export default function AnalyticsPage() {
           </div>
 
         </div>
+        <AppFooter />
       </main>
     </div>
   );

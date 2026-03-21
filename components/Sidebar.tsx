@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 
 interface SidebarProps {
   activePage: string;
@@ -109,27 +110,21 @@ function getInitials(name: string): string {
 
 export function Sidebar({ activePage, user, onLogout }: SidebarProps) {
   return (
-    <aside className="hidden md:flex flex-col w-64 bg-white border-r border-gray-100 h-screen fixed left-0 top-0 z-40">
-      {/* Brand */}
-      <div className="flex items-center gap-3 px-6 py-5 border-b border-gray-100">
-        <div className="w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-            <path d="M12 2L2 7l10 5 10-5-10-5z" fill="white" />
-            <path d="M2 17l10 5 10-5" stroke="white" strokeWidth="2" strokeLinecap="round" />
-            <path d="M2 12l10 5 10-5" stroke="white" strokeWidth="2" strokeLinecap="round" />
-          </svg>
-        </div>
-        <div>
-          <p className="text-sm font-bold text-gray-900 leading-tight">YamiMine</p>
-          <p className="text-xs text-gray-400 leading-tight">Solutions</p>
-        </div>
+    <aside className="hidden md:flex flex-col w-64 bg-[#eef0f3] h-screen fixed left-0 top-0 z-40">
+      {/* Brand logo */}
+      <div className="px-5 py-5 border-b border-gray-200/60">
+        <Image
+          src="/yms-logo.jpg"
+          alt="YamiMine Solutions"
+          width={180}
+          height={56}
+          className="object-contain"
+          priority
+        />
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-4 overflow-y-auto">
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-3 mb-3">
-          Main Menu
-        </p>
+      <nav className="flex-1 px-3 py-5 overflow-y-auto">
         <ul className="space-y-1">
           {navItems.map((item) => {
             const isActive = activePage === item.id;
@@ -137,10 +132,10 @@ export function Sidebar({ activePage, user, onLogout }: SidebarProps) {
               <li key={item.id}>
                 <Link
                   href={item.href}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${
+                  className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-medium transition-all duration-150 ${
                     isActive
-                      ? 'bg-blue-600 text-white shadow-sm shadow-blue-200'
-                      : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'
+                      ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md shadow-blue-200'
+                      : 'text-gray-500 hover:bg-white/70 hover:text-gray-800'
                   }`}
                 >
                   <span className={isActive ? 'text-white' : 'text-gray-400'}>
@@ -159,11 +154,11 @@ export function Sidebar({ activePage, user, onLogout }: SidebarProps) {
         </ul>
       </nav>
 
-      {/* User section */}
-      <div className="px-4 py-4 border-t border-gray-100">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-            <span className="text-blue-700 text-sm font-bold">
+      {/* User card */}
+      <div className="px-3 pb-4">
+        <div className="bg-white rounded-2xl px-4 py-3 shadow-sm flex items-center gap-3">
+          <div className="w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
+            <span className="text-white text-sm font-bold">
               {user ? getInitials(user.full_name) : 'U'}
             </span>
           </div>
@@ -175,14 +170,25 @@ export function Sidebar({ activePage, user, onLogout }: SidebarProps) {
               {user?.role?.replace(/_/g, ' ') || 'Loading...'}
             </p>
           </div>
+          <button
+            onClick={onLogout}
+            title="Sign out"
+            className="text-gray-400 hover:text-red-500 transition-colors flex-shrink-0"
+          >
+            <LogOutIcon />
+          </button>
         </div>
-        <button
-          onClick={onLogout}
-          className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-        >
-          <LogOutIcon />
-          Sign out
-        </button>
+
+        {/* Footer credit */}
+        <div className="mt-3 text-center">
+          <p className="text-[10px] text-gray-400 leading-tight">
+            Powered by{' '}
+            <span className="font-semibold text-gray-500">Kwahlelwa Group</span>
+          </p>
+          <p className="text-[9px] text-gray-300 mt-0.5 tracking-wide uppercase">
+            Patent Pending
+          </p>
+        </div>
       </div>
     </aside>
   );

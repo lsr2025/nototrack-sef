@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase';
 import { Sidebar } from '@/components/Sidebar';
+import { AppFooter } from '@/components/AppFooter';
 import { User, Assessment } from '@/lib/types';
 import {
   LineChart,
@@ -776,6 +777,7 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
+        <AppFooter />
       </main>
     </div>
   );
