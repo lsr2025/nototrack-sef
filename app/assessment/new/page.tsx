@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase';
 import { Sidebar } from '@/components/Sidebar';
@@ -87,10 +87,16 @@ interface FormData {
   willing_training: boolean | null;
   growth_potential: boolean | null;
 
-  // Step 9 – Photos
+  // Step 9 – Photos, Documents & Declaration
   photo_front: File | null;
   photo_interior: File | null;
   photo_id_doc: File | null;
+  doc_coa: File | null;
+  doc_bank: File | null;
+  doc_other: File | null;
+  agent_signature: string;
+  owner_signature: string;
+  declaration_agreed: boolean;
   additional_notes: string;
 }
 
@@ -117,6 +123,8 @@ const initialForm: FormData = {
   in_operation_6m: null, hygiene_compliant: null, willing_training: null,
   growth_potential: null,
   photo_front: null, photo_interior: null, photo_id_doc: null,
+  doc_coa: null, doc_bank: null, doc_other: null,
+  agent_signature: '', owner_signature: '', declaration_agreed: false,
   additional_notes: '',
 };
 
@@ -1020,6 +1028,238 @@ function Step8({ form, setForm }: { form: FormData; setForm: React.Dispatch<Reac
   );
 }
 
+// ─────────────────────────────────────────────
+// Signature pad
+// ─────────────────────────────────────────────
+function SignaturePad({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const drawing = useRef(false);
+  const last = useRef<{ x: number; y: number } | null>(null);
+
+  function getXY(e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) {
+    const canvas = canvasRef.current!;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    if ('touches' in e) {
+      return {
+        x: (e.touches[0].clientX - rect.left) * scaleX,
+        y: (e.touches[0].clientY - rect.top) * scaleY,
+      };
+    }
+    return { x: e.nativeEvent.offsetX * scaleX, y: e.nativeEvent.offsetY * scaleY };
+  }
+
+  function start(e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) {
+    e.preventDefault();
+    drawing.current = true;
+    last.current = getXY(e);
+  }
+
+  function move(e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) {
+    e.preventDefault();
+    if (!drawing.current || !last.current) return;
+    const canvas = canvasRef.current!;
+    const ctx = canvas.getContext('2d')!;
+    const pos = getXY(e);
+    ctx.beginPath();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.moveTo(last.current.x, last.current.y);
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+    last.current = pos;
+  }
+
+  function end(e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) {
+    e.preventDefault();
+    if (!drawing.current) return;
+    drawing.current = false;
+    last.current = null;
+    onChange(canvasRef.current?.toDataURL() ?? '');
+  }
+
+  function clear() {
+    const canvas = canvasRef.current!;
+    const ctx = canvas.getContext('2d')!;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    onChange('');
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1.5">
+        <FieldLabel>{label}</FieldLabel>
+        {value && (
+          <button onClick={clear} className="text-xs text-white/40 hover:text-red-400 transition-colors">
+            Clear
+          </button>
+        )}
+      </div>
+      <canvas
+        ref={canvasRef}
+        width={600}
+        height={120}
+        className="w-full rounded-xl border border-white/20 bg-[#0a1428] touch-none cursor-crosshair"
+        style={{ height: '110px' }}
+        onMouseDown={start}
+        onMouseMove={move}
+        onMouseUp={end}
+        onMouseLeave={end}
+        onTouchStart={start}
+        onTouchMove={move}
+        onTouchEnd={end}
+      />
+      <p className="text-xs mt-1 h-4">
+        {value
+          ? <span className="text-teal-400">✓ Signed</span>
+          : <span className="text-white/30">Draw signature above</span>
+        }
+      </p>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// Download profile helper
+// ─────────────────────────────────────────────
+function buildProfileHTML(form: FormData, score: number, tier: { label: string; color: string; description: string }) {
+  const yn = (v: boolean | null) => v === null ? '—' : v ? 'Yes' : 'No';
+  const nefScore = [
+    form.sa_citizen, form.registered_cipc_nef, form.willing_bank_nef,
+    form.willing_sars, form.valid_coa_nef, form.fixed_structure,
+    form.in_operation_6m, form.hygiene_compliant, form.willing_training, form.growth_potential,
+  ].filter(Boolean).length;
+
+  const row = (label: string, value: string) =>
+    `<tr><td class="label">${label}</td><td>${value || '—'}</td></tr>`;
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Spaza Shop Profile — ${form.shop_name || 'Unknown'}</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: Arial, sans-serif; font-size: 12px; color: #111; padding: 24px; }
+  h1 { font-size: 20px; color: #0a1428; margin-bottom: 2px; }
+  .subtitle { color: #555; font-size: 12px; margin-bottom: 20px; }
+  .score-badge { display: inline-block; padding: 8px 20px; border-radius: 8px; font-weight: bold; font-size: 18px; color: ${tier.color}; border: 2px solid ${tier.color}; margin-bottom: 20px; }
+  h2 { font-size: 13px; font-weight: bold; color: #0a1428; margin: 18px 0 6px; border-bottom: 1px solid #ddd; padding-bottom: 3px; text-transform: uppercase; letter-spacing: .5px; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+  td { padding: 4px 6px; border-bottom: 1px solid #f0f0f0; vertical-align: top; }
+  td.label { color: #666; width: 42%; font-size: 11px; }
+  .sig-box { border: 1px solid #ccc; border-radius: 6px; width: 100%; height: 90px; margin-top: 4px; overflow: hidden; }
+  .sig-box img { width: 100%; height: 100%; object-fit: contain; }
+  .nef-score { font-size: 22px; font-weight: bold; color: #0a1428; }
+  .footer { margin-top: 28px; font-size: 10px; color: #aaa; text-align: center; border-top: 1px solid #eee; padding-top: 8px; }
+  @media print { body { padding: 12px; } }
+</style>
+</head>
+<body>
+<h1>Spaza Shop Assessment Profile</h1>
+<p class="subtitle">YMS-SEF Assessment · ${new Date().toLocaleDateString('en-ZA', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
+<div class="score-badge">Compliance: ${score}/100 — ${tier.label}</div>
+
+<h2>Shop &amp; Owner</h2>
+<table>
+${row('Shop Name', form.shop_name)}
+${row('Owner Name', form.owner_name)}
+${row('Contact', form.contact)}
+${row('Email', form.email)}
+${row('Address', form.address)}
+${row('Municipality', form.municipality)}
+${row('Ward No.', form.ward_no)}
+${row('GPS', form.gps_lat !== null ? `${form.gps_lat.toFixed(5)}, ${form.gps_lng?.toFixed(5)}` : '—')}
+</table>
+
+<h2>Registration &amp; Compliance</h2>
+<table>
+${row('CIPC Registered', yn(form.is_registered))}
+${row('CIPC Number', form.cipc_number)}
+${row('Business Bank Account', yn(form.has_bank_account_s2))}
+${row('Bank Name', form.bank_name_s2)}
+${row('Municipal COA', yn(form.has_coa))}
+${row('COA Number', form.coa_number)}
+${row('Years Operating', form.years_operating)}
+</table>
+
+<h2>Infrastructure</h2>
+<table>
+${row('Structure Type', form.structure_type)}
+${row('Store Size', form.store_size)}
+${row('Storage', form.storage.join(', '))}
+${row('Products', form.products.join(', '))}
+</table>
+
+<h2>General Hygiene</h2>
+<table>
+${row('Acceptable Overall Cleanliness', yn(form.cleanliness_ok))}
+${row('No Excessive Dust/Dirt', yn(form.no_dust))}
+${row('Hand-washing Facilities', yn(form.handwashing))}
+${row('No Animals/Pets on Premises', yn(form.no_animals))}
+${row('Acceptable Waste Usage', yn(form.waste_ok))}
+</table>
+
+<h2>Food Safety</h2>
+<table>
+${row('Food Stored Directly on Floor', yn(form.food_on_floor))}
+${row('Expired/Damaged Food on Shelves', yn(form.expired_food))}
+${row('Food Items Labelled within Expiry', yn(form.food_labelled))}
+${row('Food &amp; Non-food Stored Separately', yn(form.food_nonfood_separated))}
+</table>
+
+<h2>General &amp; Safety Requirements</h2>
+<table>
+${row('Acceptable Lighting &amp; Ventilation', yn(form.lighting_ok))}
+${row('Acceptable Floors, Walls &amp; Ceiling', yn(form.floors_ok))}
+${row('Cleaning Materials on Site', yn(form.cleaning_materials))}
+${row('Safety Signage &amp; Hazards', yn(form.safety_signage))}
+${row('Disability Accessible', yn(form.disability_accessible))}
+${row('Shop not used as Sleeping Space', yn(form.not_sleeping_space))}
+${row('YMS Observations', form.yms_observations)}
+</table>
+
+<h2>Business Development</h2>
+<table>
+${row('Payment Methods', form.payment_methods.join(', '))}
+${row('POS System', yn(form.has_pos))}
+${row('Order Sources', form.ordering_methods.join(', '))}
+${row('Makes Deliveries', yn(form.makes_deliveries))}
+${row('Click &amp; Collect', yn(form.click_collect))}
+${row('Collection Point', form.collection_point.join(', '))}
+${row('Space &amp; Security', yn(form.space_security))}
+${row('Monthly Turnover', form.monthly_turnover)}
+${row('Number of Employees', form.num_employees)}
+${row('Support Needed', form.support_needed.join(', '))}
+</table>
+
+<h2>NEF Grant Eligibility · Score: <span class="nef-score">${nefScore}/10</span></h2>
+<table>
+${row('SA Citizen with Valid ID', yn(form.sa_citizen))}
+${row('Registered Business with CIPC', yn(form.registered_cipc_nef))}
+${row('Business Bank Account (or willing)', yn(form.willing_bank_nef))}
+${row('SARS Tax Number (or willing to register)', yn(form.willing_sars))}
+${row('Valid Municipal COA for Food Handling', yn(form.valid_coa_nef))}
+${row('Operates from a Fixed Structure', yn(form.fixed_structure))}
+${row('In Operation for at least 6 Months', yn(form.in_operation_6m))}
+${row('Complies with Basic Hygiene Standards', yn(form.hygiene_compliant))}
+${row('Willing to Participate in Training', yn(form.willing_training))}
+${row('Demonstrates Growth Potential', yn(form.growth_potential))}
+</table>
+
+${form.agent_signature ? `<h2>Agent Signature</h2><div class="sig-box"><img src="${form.agent_signature}" /></div>` : ''}
+${form.owner_signature ? `<h2>Owner/Representative Signature</h2><div class="sig-box"><img src="${form.owner_signature}" /></div>` : ''}
+
+${form.additional_notes ? `<h2>Additional Notes</h2><p>${form.additional_notes}</p>` : ''}
+
+<p class="footer">YMS-SEF: Final_Spaza_Shop_Assessment_Form · Created by Kwahlelwa Group · ${new Date().toISOString()}</p>
+</body>
+</html>`;
+}
+
 function Step9({
   form,
   setForm,
@@ -1029,74 +1269,112 @@ function Step9({
 }) {
   const score = calculateScore(form);
   const tier = getComplianceTier(score);
+  const nefScore = [
+    form.sa_citizen, form.registered_cipc_nef, form.willing_bank_nef,
+    form.willing_sars, form.valid_coa_nef, form.fixed_structure,
+    form.in_operation_6m, form.hygiene_compliant, form.willing_training, form.growth_potential,
+  ].filter(Boolean).length;
 
-  function handleFile(field: 'photo_front' | 'photo_interior' | 'photo_id_doc', file: File | null) {
-    setForm((p) => ({ ...p, [field]: file }));
-  }
+  type DocField = 'photo_front' | 'photo_interior' | 'photo_id_doc' | 'doc_coa' | 'doc_bank' | 'doc_other';
 
-  const photoFields: { field: 'photo_front' | 'photo_interior' | 'photo_id_doc'; label: string; hint: string }[] = [
-    { field: 'photo_front', label: 'Shop front photo', hint: 'Clear photo of the shop exterior' },
-    { field: 'photo_interior', label: 'Shop interior photo', hint: 'Inside of the shop' },
-    { field: 'photo_id_doc', label: 'Owner ID / document photo', hint: 'ID book, ID card or business doc' },
+  const docSlots: { field: DocField; label: string; hint: string; icon: string; accept: string }[] = [
+    { field: 'photo_front',    label: 'Shop Front',        hint: 'Exterior photo',          icon: '🏪', accept: 'image/*' },
+    { field: 'photo_interior', label: 'Shop Interior',     hint: 'Inside view',             icon: '🛒', accept: 'image/*' },
+    { field: 'photo_id_doc',   label: 'Owner ID',          hint: 'SA ID or passport',       icon: '🪪', accept: 'image/*,.pdf' },
+    { field: 'doc_coa',        label: 'COA Certificate',   hint: 'Municipal food handling', icon: '📜', accept: 'image/*,.pdf' },
+    { field: 'doc_bank',       label: 'Bank Statement',    hint: '3 months or bank letter', icon: '🏦', accept: 'image/*,.pdf' },
+    { field: 'doc_other',      label: 'Other Document',    hint: 'Any supporting doc',      icon: '📁', accept: 'image/*,.pdf' },
   ];
 
-  const summaryRows: { label: string; value: string }[] = [
-    { label: 'Shop name', value: form.shop_name || '—' },
+  const summaryRows = [
+    { label: 'Shop', value: form.shop_name || '—' },
     { label: 'Owner', value: form.owner_name || '—' },
     { label: 'Municipality', value: form.municipality || '—' },
     { label: 'GPS', value: form.gps_lat !== null ? `${form.gps_lat.toFixed(4)}, ${form.gps_lng?.toFixed(4)}` : '—' },
-    { label: 'Registered', value: form.is_registered === null ? '—' : form.is_registered ? 'Yes' : 'No' },
-    { label: 'Has CoA', value: form.has_coa === null ? '—' : form.has_coa ? 'Yes' : 'No' },
-    { label: 'Bank account', value: form.has_bank_account_s2 === null ? '—' : form.has_bank_account_s2 ? 'Yes' : 'No' },
+    { label: 'CIPC Registered', value: form.is_registered === null ? '—' : form.is_registered ? 'Yes' : 'No' },
+    { label: 'Bank Account', value: form.has_bank_account_s2 === null ? '—' : form.has_bank_account_s2 ? 'Yes' : 'No' },
+    { label: 'CoA', value: form.has_coa === null ? '—' : form.has_coa ? 'Yes' : 'No' },
     { label: 'Structure', value: form.structure_type || '—' },
-    { label: 'Shop size', value: form.store_size || '—' },
+    { label: 'Size', value: form.store_size || '—' },
     { label: 'Employees', value: form.num_employees || '—' },
-    { label: 'SA Citizen', value: form.sa_citizen === null ? '—' : form.sa_citizen ? 'Yes' : 'No' },
-    { label: 'Growth Potential', value: form.growth_potential === null ? '—' : form.growth_potential ? 'Yes' : 'No' },
+    { label: 'NEF Score', value: `${nefScore} / 10` },
   ];
 
-  return (
-    <div className="space-y-5">
-      {photoFields.map(({ field, label, hint }) => (
-        <div key={field}>
-          <FieldLabel>{label}</FieldLabel>
-          <label className="block cursor-pointer">
-            <div
-              className={`w-full rounded-lg border-2 border-dashed px-4 py-4 text-center transition-all ${
-                form[field] ? 'border-teal-500/50 bg-teal-500/10' : 'border-white/20 hover:border-white/40'
-              }`}
-            >
-              {form[field] ? (
-                <div>
-                  <p className="text-teal-300 text-sm font-medium">{(form[field] as File).name}</p>
-                  <p className="text-white/40 text-xs mt-0.5">
-                    {((form[field] as File).size / 1024).toFixed(0)} KB — click to replace
-                  </p>
-                </div>
-              ) : (
-                <div>
-                  <svg className="mx-auto mb-1 text-white/30" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                    <circle cx="8.5" cy="8.5" r="1.5" />
-                    <polyline points="21 15 16 10 5 21" />
-                  </svg>
-                  <p className="text-white/50 text-sm">Tap to upload photo</p>
-                  <p className="text-white/30 text-xs">{hint}</p>
-                </div>
-              )}
-            </div>
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => handleFile(field, e.target.files?.[0] ?? null)}
-            />
-          </label>
-        </div>
-      ))}
+  function downloadProfile() {
+    const html = buildProfileHTML(form, score, tier);
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const win = window.open(url, '_blank');
+    if (win) {
+      win.addEventListener('load', () => {
+        setTimeout(() => { win.print(); URL.revokeObjectURL(url); }, 400);
+      });
+    }
+  }
 
+  return (
+    <div className="space-y-6">
+
+      {/* ── Photos & Documents ── */}
       <div>
-        <FieldLabel>Additional notes</FieldLabel>
+        <SectionDivider label="Photos & Documents" />
+        <div className="grid grid-cols-3 gap-2.5 mt-3">
+          {docSlots.map(({ field, label, hint, icon, accept }) => {
+            const file = form[field] as File | null;
+            return (
+              <label key={field} className="block cursor-pointer">
+                <div
+                  className={`rounded-xl border-2 border-dashed flex flex-col items-center justify-center text-center p-3 transition-all min-h-[90px] ${
+                    file
+                      ? 'border-teal-500/60 bg-teal-500/10'
+                      : 'border-white/15 hover:border-white/35 bg-white/3'
+                  }`}
+                >
+                  <span className="text-xl mb-1">{icon}</span>
+                  {file ? (
+                    <>
+                      <p className="text-teal-300 text-[10px] font-semibold leading-tight truncate w-full">{file.name}</p>
+                      <p className="text-white/35 text-[9px] mt-0.5">{(file.size / 1024).toFixed(0)} KB</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-white/60 text-[10px] font-medium leading-tight">{label}</p>
+                      <p className="text-white/30 text-[9px] mt-0.5">{hint}</p>
+                    </>
+                  )}
+                </div>
+                <input
+                  type="file"
+                  accept={accept}
+                  className="hidden"
+                  onChange={(e) => setForm((p) => ({ ...p, [field]: e.target.files?.[0] ?? null }))}
+                />
+              </label>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── Signatures ── */}
+      <div>
+        <SectionDivider label="Signatures" />
+        <div className="mt-3 space-y-4">
+          <SignaturePad
+            label="Field Agent Signature"
+            value={form.agent_signature}
+            onChange={(v) => setForm((p) => ({ ...p, agent_signature: v }))}
+          />
+          <SignaturePad
+            label="Shop Owner / Representative Signature"
+            value={form.owner_signature}
+            onChange={(v) => setForm((p) => ({ ...p, owner_signature: v }))}
+          />
+        </div>
+      </div>
+
+      {/* ── Additional notes ── */}
+      <div>
+        <FieldLabel>Additional Notes</FieldLabel>
         <TextareaInput
           value={form.additional_notes}
           onChange={(v) => setForm((p) => ({ ...p, additional_notes: v }))}
@@ -1105,31 +1383,78 @@ function Step9({
         />
       </div>
 
-      <SectionDivider label="Assessment Preview" />
-
-      <div className="rounded-xl border border-white/10 overflow-hidden">
-        <div
-          className="px-4 py-3 flex items-center justify-between"
-          style={{ backgroundColor: `${tier.color}22`, borderBottom: `1px solid ${tier.color}33` }}
-        >
-          <div>
-            <p className="text-white font-semibold text-sm">Compliance Score</p>
-            <p className="text-white/50 text-xs">{tier.description}</p>
-          </div>
-          <div className="text-right">
-            <p className="text-2xl font-bold" style={{ color: tier.color }}>{score}</p>
-            <p className="text-xs font-semibold" style={{ color: tier.color }}>{tier.label}</p>
-          </div>
-        </div>
-        <div className="divide-y divide-white/5">
-          {summaryRows.map(({ label, value }) => (
-            <div key={label} className="flex justify-between items-center px-4 py-2">
-              <span className="text-white/50 text-xs">{label}</span>
-              <span className="text-white text-xs font-medium">{value}</span>
+      {/* ── Declaration ── */}
+      <div>
+        <SectionDivider label="Declaration" />
+        <label className="flex items-start gap-3 cursor-pointer mt-3">
+          <div className="relative flex-shrink-0 mt-0.5">
+            <input
+              type="checkbox"
+              className="sr-only"
+              checked={form.declaration_agreed}
+              onChange={(e) => setForm((p) => ({ ...p, declaration_agreed: e.target.checked }))}
+            />
+            <div
+              className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+                form.declaration_agreed
+                  ? 'bg-teal-500 border-teal-500'
+                  : 'border-white/30 bg-white/5'
+              }`}
+            >
+              {form.declaration_agreed && (
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                  <path d="M1.5 5L4 7.5L8.5 2.5" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              )}
             </div>
-          ))}
+          </div>
+          <p className="text-white/70 text-sm leading-relaxed">
+            I confirm that the information provided in this assessment is <span className="text-white font-medium">accurate and complete</span> to the best of my knowledge, and that this assessment was conducted in person at the stated premises on{' '}
+            <span className="text-white font-medium">{new Date().toLocaleDateString('en-ZA', { day: '2-digit', month: 'long', year: 'numeric' })}</span>.
+          </p>
+        </label>
+      </div>
+
+      {/* ── Assessment Preview ── */}
+      <div>
+        <SectionDivider label="Assessment Preview" />
+        <div className="mt-3 rounded-xl border border-white/10 overflow-hidden">
+          <div
+            className="px-4 py-3 flex items-center justify-between"
+            style={{ backgroundColor: `${tier.color}22`, borderBottom: `1px solid ${tier.color}33` }}
+          >
+            <div>
+              <p className="text-white font-semibold text-sm">Compliance Score</p>
+              <p className="text-white/50 text-xs">{tier.description}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-2xl font-bold" style={{ color: tier.color }}>{score}</p>
+              <p className="text-xs font-semibold" style={{ color: tier.color }}>{tier.label} Tier</p>
+            </div>
+          </div>
+          <div className="divide-y divide-white/5">
+            {summaryRows.map(({ label, value }) => (
+              <div key={label} className="flex justify-between items-center px-4 py-2">
+                <span className="text-white/50 text-xs">{label}</span>
+                <span className="text-white text-xs font-medium">{value}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
+
+      {/* ── Download Profile ── */}
+      <button
+        onClick={downloadProfile}
+        className="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-xl border border-blue-500/40 bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 font-medium text-sm transition-all"
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+          <polyline points="7 10 12 15 17 10" />
+          <line x1="12" y1="15" x2="12" y2="3" />
+        </svg>
+        Download Establishment Profile
+      </button>
     </div>
   );
 }
@@ -1275,12 +1600,39 @@ export default function AssessmentWizardPage() {
     if (currentStep > 1) setCurrentStep((s) => s - 1);
   }
 
+  // Upload a file to Supabase Storage, return public URL or null
+  async function uploadFile(file: File, folder: string, name: string): Promise<string | null> {
+    try {
+      const ext = file.name.split('.').pop() ?? 'bin';
+      const path = `${folder}/${name}.${ext}`;
+      const { error } = await supabase.storage
+        .from('assessment-docs')
+        .upload(path, file, { upsert: true });
+      if (error) return null;
+      const { data } = supabase.storage.from('assessment-docs').getPublicUrl(path);
+      return data.publicUrl ?? null;
+    } catch {
+      return null;
+    }
+  }
+
   // Submit
   async function handleSubmit() {
     setIsSubmitting(true);
     try {
       const score = calculateScore(form);
       const tier = getComplianceTier(score);
+      const folder = `${Date.now()}_${(form.shop_name || 'shop').replace(/\W+/g, '_')}`;
+
+      // Upload files concurrently
+      const [photoFrontUrl, photoInteriorUrl, photoIdUrl, docCoaUrl, docBankUrl, docOtherUrl] = await Promise.all([
+        form.photo_front    ? uploadFile(form.photo_front,    folder, 'photo_front')    : null,
+        form.photo_interior ? uploadFile(form.photo_interior, folder, 'photo_interior') : null,
+        form.photo_id_doc   ? uploadFile(form.photo_id_doc,   folder, 'photo_id_doc')   : null,
+        form.doc_coa        ? uploadFile(form.doc_coa,        folder, 'doc_coa')        : null,
+        form.doc_bank       ? uploadFile(form.doc_bank,       folder, 'doc_bank')       : null,
+        form.doc_other      ? uploadFile(form.doc_other,      folder, 'doc_other')      : null,
+      ]);
 
       const payload = {
         agent_id: agentId,
@@ -1351,6 +1703,16 @@ export default function AssessmentWizardPage() {
         growth_potential: form.growth_potential,
 
         additional_notes: form.additional_notes || null,
+
+        photo_front_url: photoFrontUrl,
+        photo_interior_url: photoInteriorUrl,
+        photo_id_url: photoIdUrl,
+        doc_coa_url: docCoaUrl,
+        doc_bank_url: docBankUrl,
+        doc_other_url: docOtherUrl,
+        agent_signature: form.agent_signature || null,
+        owner_signature: form.owner_signature || null,
+        declaration_agreed: form.declaration_agreed,
 
         compliance_score: score,
         compliance_tier: tier.tier,
