@@ -120,12 +120,16 @@ function SearchIcon() {
 // ─── Shop Card ────────────────────────────────────────────────────────────────
 
 function ShopCard({ shop }: { shop: ShopRecord }) {
+  const router = useRouter();
   const tierInfo = getTierInfo(shop.compliance_tier);
   const statusInfo = getStatusInfo(shop.status);
   const agentInitials = shop.agent_name ? getInitials(shop.agent_name) : '?';
+  const shopId = shop.id || shop.offline_id;
 
   return (
-    <div className="bg-[#1A2D5A] rounded-2xl p-5 border border-white/10 hover:border-white/20 transition-all hover:shadow-lg hover:shadow-black/20 group">
+    <div
+      onClick={() => shopId && router.push(`/shops/${shopId}`)}
+      className="bg-[#1A2D5A] rounded-2xl p-5 border border-white/10 hover:border-white/20 transition-all hover:shadow-lg hover:shadow-black/20 group cursor-pointer">
       {/* Top row */}
       <div className="flex items-start justify-between mb-3">
         <div className="flex-1 min-w-0 pr-3">
