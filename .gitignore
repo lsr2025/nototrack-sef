@@ -44,3 +44,6 @@ Thumbs.db
 /public/sw.js
 /public/workbox-*.js
 .vercel
+
+# Import data (contains PII - do not commit)
+scripts/step2_import_data.sql
