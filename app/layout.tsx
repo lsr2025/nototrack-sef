@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import { ThemeProvider } from '@/lib/theme';
 
 export const metadata: Metadata = {
   title: 'NotoTrack — YamiMine Solutions',
@@ -29,8 +30,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
+        {/* Apply saved theme before first paint to prevent flash */}
+        <script dangerouslySetInnerHTML={{ __html: `
+          (function(){var t=localStorage.getItem('noto-theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();
+        ` }} />
         <meta name="theme-color" content="#2563EB" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -51,7 +56,7 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="bg-background text-text-primary">{children}</body>
+      <body className="bg-background text-text-primary"><ThemeProvider>{children}</ThemeProvider></body>
     </html>
   );
 }

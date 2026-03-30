@@ -106,3 +106,59 @@ textarea::placeholder {
 .pulse-dot {
   animation: pulse-dot 1.5s ease-in-out infinite;
 }
+
+/* ── Light mode theme ───────────────────────────────────────────────────────── */
+
+[data-theme="light"] body {
+  background-color: #f1f5f9;
+}
+
+[data-theme="light"] .bg-dark {
+  background-color: #f1f5f9 !important;
+}
+
+[data-theme="light"] .bg-navy {
+  background-color: #ffffff !important;
+}
+
+/* Text inside dark containers */
+[data-theme="light"] .bg-dark .text-white,
+[data-theme="light"] .bg-navy .text-white {
+  color: #0f172a !important;
+}
+
+[data-theme="light"] .bg-dark .text-white\/70,
+[data-theme="light"] .bg-navy .text-white\/70 {
+  color: #475569 !important;
+}
+
+[data-theme="light"] .bg-dark .text-white\/60,
+[data-theme="light"] .bg-navy .text-white\/60 {
+  color: #64748b !important;
+}
+
+/* Borders */
+[data-theme="light"] .border-white\/10,
+[data-theme="light"] .bg-navy .border-white\/10 {
+  border-color: #e2e8f0 !important;
+}
+
+[data-theme="light"] .border-teal\/20 {
+  border-color: rgba(13, 122, 107, 0.25) !important;
+}
+
+/* Keep white text on coloured action buttons & badges */
+[data-theme="light"] .bg-blue-600,
+[data-theme="light"] .bg-blue-500,
+[data-theme="light"] .bg-emerald-600,
+[data-theme="light"] .bg-red-600,
+[data-theme="light"] .bg-cyan-600,
+[data-theme="light"] .bg-slate-900,
+[data-theme="light"] .bg-slate-800 {
+  color: #ffffff;
+}
+
+/* Sidebar stays the same neutral in both modes */
+[data-theme="light"] .bg-\[\#eef0f3\] {
+  background-color: #eef0f3 !important;
+}
