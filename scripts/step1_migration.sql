@@ -126,3 +126,17 @@ CREATE INDEX IF NOT EXISTS idx_assessments_municipality
 -- ── Done ─────────────────────────────────────────────────────────
 -- Now run scripts/step2_import_data.sql
 -- ============================================================
+
+-- ── 5. GPS Assignment: coordinator update policy on assessments ──
+
+DROP POLICY IF EXISTS "coordinators_update_gps" ON public.assessments;
+CREATE POLICY "coordinators_update_gps"
+  ON public.assessments
+  FOR UPDATE
+  USING (true)
+  WITH CHECK (true);
+
+-- ── 6. Ensure RLS is enabled on gps_staging ──────────────────────
+-- (gps_staging is created in step0_gps_staging.sql; this is a safety
+--  guard in case step1 is run after step0 on a fresh db)
+ALTER TABLE IF EXISTS public.gps_staging ENABLE ROW LEVEL SECURITY;

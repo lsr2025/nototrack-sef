@@ -26,6 +26,18 @@ export interface ShopPin {
   status: string;
 }
 
+export interface StagingPin {
+  id: string;
+  lat: number;
+  lng: number;
+  shop_hint: string;
+  ward_hint: string;
+  municipality_hint: string;
+  raw_context: string;
+  match_score: number;
+  assigned_to: string | null;
+}
+
 export type MapView = 'pins' | 'heat' | 'wards';
 export type MapStyle = 'dark' | 'light' | 'satellite';
 
@@ -122,6 +134,21 @@ function ShopPopupCard({ shop, onClose }: { shop: ShopPin; onClose: () => void }
   );
 }
 
+// ─── Staging pin icon (pulsing orange) ───────────────────────────────────────
+
+function makeStagingIcon() {
+  return L.divIcon({
+    className: '',
+    html: `<div style="position:relative;width:32px;height:32px">
+      <div style="position:absolute;inset:0;border-radius:50%;background:rgba(251,146,60,0.3);animation:pulse 1.5s ease-in-out infinite"></div>
+      <div style="position:absolute;inset:4px;border-radius:50%;background:#f97316;border:2px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.5)"></div>
+      <div style="position:absolute;inset:10px;border-radius:50%;background:white;opacity:0.8"></div>
+    </div>`,
+    iconSize: [32, 32],
+    iconAnchor: [16, 16],
+  });
+}
+
 // ─── Map Canvas ───────────────────────────────────────────────────────────────
 
 interface MapCanvasProps {
@@ -131,10 +158,14 @@ interface MapCanvasProps {
   selectedShop: ShopPin | null;
   onShopClick: (shop: ShopPin) => void;
   onClosePopup: () => void;
+  stagingPins?: StagingPin[];
+  selectedStagingPin?: StagingPin | null;
+  onStagingPinClick?: (pin: StagingPin) => void;
 }
 
 export default function MapCanvas({
   shops, mapView, mapStyle, selectedShop, onShopClick, onClosePopup,
+  stagingPins, onStagingPinClick,
 }: MapCanvasProps) {
 
   function makePinIcon(color: string) {
@@ -154,6 +185,7 @@ export default function MapCanvas({
 
   return (
     <div className="w-full h-full relative">
+      <style>{`@keyframes pulse { 0%,100%{transform:scale(1);opacity:0.7} 50%{transform:scale(1.6);opacity:0} }`}</style>
       <MapContainer
         center={[-29.5, 30.8]}
         zoom={10}
@@ -191,6 +223,15 @@ export default function MapCanvas({
             radius={14}
             pathOptions={{ color: '#22d3ee', fillColor: '#22d3ee', fillOpacity: 0.2, weight: 3 }}
             eventHandlers={{ click: () => onShopClick(shop) }}
+          />
+        ))}
+
+        {stagingPins && stagingPins.filter(p => !p.assigned_to).map(pin => (
+          <Marker
+            key={pin.id}
+            position={[pin.lat, pin.lng]}
+            icon={makeStagingIcon()}
+            eventHandlers={{ click: () => onStagingPinClick?.(pin) }}
           />
         ))}
       </MapContainer>

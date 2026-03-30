@@ -9,7 +9,7 @@ import {
   ChevronLeft, ChevronRight, ArrowLeft, TriangleAlert,
   CheckCircle2, BarChart2, Focus, Store,
 } from 'lucide-react';
-import type { ShopPin, MapView, MapStyle } from '@/components/MapCanvas';
+import type { ShopPin, MapView, MapStyle, StagingPin } from '@/components/MapCanvas';
 
 // ─── Dynamically import the map (Leaflet is client-only) ─────────────────────
 
@@ -31,6 +31,15 @@ interface AgentRow {
   id: string;
   full_name: string;
   municipality?: string;
+}
+
+interface UnmappedShop {
+  id: string;
+  shop_name: string;
+  municipality: string;
+  ward_no: string;
+  compliance_score: number;
+  compliance_tier: number;
 }
 
 // ─── Legend Card ──────────────────────────────────────────────────────────────
@@ -213,6 +222,156 @@ function SpatialPanel({
   );
 }
 
+// ─── GPS Assign Panel ─────────────────────────────────────────────────────────
+
+function GpsAssignPanel({
+  stagingPins,
+  unmappedShops,
+  selectedPin,
+  assignTarget,
+  searchQuery,
+  onSearchChange,
+  onSelectTarget,
+  onAssign,
+  onSkip,
+  onPinSelect,
+  isSaving,
+  open,
+  onToggle,
+}: {
+  stagingPins: StagingPin[];
+  unmappedShops: UnmappedShop[];
+  selectedPin: StagingPin | null;
+  assignTarget: string;
+  searchQuery: string;
+  onSearchChange: (v: string) => void;
+  onSelectTarget: (id: string) => void;
+  onAssign: () => void;
+  onSkip: () => void;
+  onPinSelect: (pin: StagingPin) => void;
+  isSaving: boolean;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  const remaining = stagingPins.length;
+  const filteredShops = unmappedShops.filter(s =>
+    s.shop_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (s.municipality || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (s.ward_no || '').includes(searchQuery)
+  );
+
+  return (
+    <div className={`absolute top-0 right-0 h-full z-[450] flex transition-all duration-300 ease-in-out ${open ? 'w-[320px]' : 'w-0'}`}>
+      <button
+        onClick={onToggle}
+        className="absolute -left-6 top-1/2 -translate-y-1/2 bg-orange-500 hover:bg-orange-600 text-white rounded-l-lg w-6 h-10 flex items-center justify-center z-10"
+      >
+        {open ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronLeft className="w-3.5 h-3.5" />}
+      </button>
+      <div className="w-full h-full bg-slate-900 border-l border-slate-800 overflow-y-auto flex flex-col">
+        {/* Header */}
+        <div className="bg-gradient-to-r from-orange-600 to-amber-500 px-4 py-3 flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <MapPin className="w-5 h-5 text-white" />
+            <div>
+              <p className="text-white font-bold text-base leading-tight">GPS Assignment</p>
+              <p className="text-orange-100 text-xs">{remaining} pins unassigned · {unmappedShops.length} shops need GPS</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Selected pin card */}
+        {selectedPin && (
+          <div className="mx-3 mt-3 rounded-xl bg-orange-500/10 border border-orange-500/30 p-3">
+            <p className="text-orange-300 text-xs font-bold uppercase tracking-wide mb-1">Selected Pin</p>
+            <p className="text-white text-sm font-semibold">{selectedPin.shop_hint || 'No label'}</p>
+            {selectedPin.ward_hint && (
+              <p className="text-slate-400 text-xs">Ward {selectedPin.ward_hint} {selectedPin.municipality_hint}</p>
+            )}
+            <p className="text-slate-500 text-xs mt-1 italic line-clamp-2">{selectedPin.raw_context}</p>
+            <p className="text-slate-500 text-xs mt-1 font-mono">{selectedPin.lat.toFixed(6)}, {selectedPin.lng.toFixed(6)}</p>
+          </div>
+        )}
+
+        {/* Shop search */}
+        {selectedPin && (
+          <div className="px-3 mt-3 flex-shrink-0">
+            <p className="text-slate-400 text-xs font-bold uppercase tracking-wide mb-2">Assign to shop</p>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => onSearchChange(e.target.value)}
+              placeholder="Search shops without GPS..."
+              className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm placeholder-slate-500 focus:outline-none focus:border-orange-500"
+            />
+          </div>
+        )}
+
+        {/* Shop list */}
+        {selectedPin && (
+          <div className="flex-1 overflow-y-auto px-3 mt-2">
+            {filteredShops.slice(0, 50).map(shop => (
+              <button
+                key={shop.id}
+                onClick={() => onSelectTarget(shop.id)}
+                className={`w-full text-left px-3 py-2.5 rounded-lg mb-1 transition-all ${
+                  assignTarget === shop.id
+                    ? 'bg-orange-500/20 border border-orange-500/50'
+                    : 'bg-slate-800 hover:bg-slate-700 border border-transparent'
+                }`}
+              >
+                <p className="text-white text-sm font-medium leading-tight">{shop.shop_name}</p>
+                <p className="text-slate-400 text-xs">{shop.municipality} · Ward {shop.ward_no || '—'}</p>
+              </button>
+            ))}
+            {filteredShops.length === 0 && (
+              <p className="text-slate-500 text-sm text-center py-4">No matching shops</p>
+            )}
+          </div>
+        )}
+
+        {/* Action buttons */}
+        {selectedPin && (
+          <div className="flex-shrink-0 p-3 border-t border-slate-800 flex gap-2">
+            <button
+              onClick={onSkip}
+              className="flex-1 py-2 rounded-lg bg-slate-800 text-slate-300 text-sm hover:bg-slate-700 transition-colors"
+            >
+              Skip
+            </button>
+            <button
+              onClick={onAssign}
+              disabled={!assignTarget || isSaving}
+              className="flex-1 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 disabled:opacity-40 text-white text-sm font-semibold transition-colors"
+            >
+              {isSaving ? 'Saving...' : 'Assign GPS'}
+            </button>
+          </div>
+        )}
+
+        {/* When no pin selected: show staging pin list */}
+        {!selectedPin && (
+          <div className="flex-1 overflow-y-auto px-3 py-2">
+            <p className="text-slate-400 text-xs uppercase tracking-wide font-bold mb-2">Tap a pin on the map</p>
+            {stagingPins.map(pin => (
+              <button
+                key={pin.id}
+                onClick={() => onPinSelect(pin)}
+                className="w-full text-left px-3 py-2.5 rounded-lg mb-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-all"
+              >
+                <p className="text-orange-300 text-sm font-medium">{pin.shop_hint || 'Unlabelled pin'}</p>
+                <p className="text-slate-500 text-xs">
+                  {pin.lat.toFixed(4)}, {pin.lng.toFixed(4)}{pin.ward_hint ? ` · Ward ${pin.ward_hint}` : ''}
+                </p>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function GISCommandCentre() {
@@ -232,11 +391,22 @@ export default function GISCommandCentre() {
   const [muniFilter,   setMuniFilter]   = useState('All Municipalities');
   const [riskFilter,   setRiskFilter]   = useState('All Risks');
 
+  // GPS Assignment Mode
+  const [gpsMode, setGpsMode]                     = useState(false);
+  const [stagingPins, setStagingPins]             = useState<StagingPin[]>([]);
+  const [unmappedShops, setUnmappedShops]         = useState<UnmappedShop[]>([]);
+  const [selectedStagingPin, setSelectedStagingPin] = useState<StagingPin | null>(null);
+  const [assignTarget, setAssignTarget]           = useState<string>('');
+  const [searchQuery, setSearchQuery]             = useState('');
+  const [isSaving, setIsSaving]                   = useState(false);
+  const [user, setUser]                           = useState<{ role_tier?: number } | null>(null);
+  const [stagingUnassignedCount, setStagingUnassignedCount] = useState(0);
+
   const fetchData = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) { router.push('/'); return; }
 
-    const [shopsRes, agentsRes] = await Promise.all([
+    const [shopsRes, agentsRes, stagingCountRes, userRes] = await Promise.all([
       supabase.from('assessments')
         .select('id, shop_name, owner_name, municipality, ward_no, gps_lat, gps_lng, compliance_score, compliance_tier, status')
         .not('gps_lat', 'is', null)
@@ -244,14 +414,58 @@ export default function GISCommandCentre() {
       supabase.from('users')
         .select('id, full_name, municipality')
         .limit(200),
+      supabase.from('gps_staging').select('id', { count: 'exact', head: true }).is('assigned_to', null),
+      supabase.from('users').select('role_tier').eq('id', session.user.id).single(),
     ]);
 
     if (shopsRes.data) setShops(shopsRes.data as ShopPin[]);
     if (agentsRes.data) setAgents(agentsRes.data as AgentRow[]);
+    if (stagingCountRes.count != null) setStagingUnassignedCount(stagingCountRes.count);
+    if (userRes.data) setUser(userRes.data);
     setLoading(false);
   }, [supabase, router]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Fetch GPS staging data when gpsMode activates
+  useEffect(() => {
+    if (!gpsMode) return;
+    async function fetchGpsData() {
+      const [stagingRes, unmappedRes] = await Promise.all([
+        supabase.from('gps_staging').select('*').is('assigned_to', null),
+        supabase.from('assessments')
+          .select('id, shop_name, municipality, ward_no, compliance_score, compliance_tier')
+          .is('gps_lat', null)
+          .order('shop_name'),
+      ]);
+      if (stagingRes.data) setStagingPins(stagingRes.data as StagingPin[]);
+      if (unmappedRes.data) setUnmappedShops(unmappedRes.data as UnmappedShop[]);
+    }
+    fetchGpsData();
+  }, [gpsMode, supabase]);
+
+  async function handleAssign() {
+    if (!selectedStagingPin || !assignTarget) return;
+    setIsSaving(true);
+    try {
+      await supabase.from('assessments')
+        .update({ gps_lat: selectedStagingPin.lat, gps_lng: selectedStagingPin.lng })
+        .eq('id', assignTarget);
+      await supabase.from('gps_staging')
+        .update({ assigned_to: assignTarget, assigned_at: new Date().toISOString() })
+        .eq('id', selectedStagingPin.id);
+      // Refresh local state
+      setStagingPins(prev => prev.filter(p => p.id !== selectedStagingPin.id));
+      setUnmappedShops(prev => prev.filter(s => s.id !== assignTarget));
+      setSelectedStagingPin(null);
+      setAssignTarget('');
+      setStagingUnassignedCount(c => Math.max(0, c - 1));
+      // Refresh mapped shops
+      fetchData();
+    } finally {
+      setIsSaving(false);
+    }
+  }
 
   const filteredShops = shops.filter(s => {
     if (statusFilter === 'Compliant' && !(s.compliance_tier === 1 || s.compliance_tier === 2)) return false;
@@ -319,6 +533,26 @@ export default function GISCommandCentre() {
             ))}
           </div>
 
+          {/* GPS Assignment Mode button — visible to coordinators (role_tier <= 2) */}
+          {user && (user.role_tier ?? 5) <= 2 && (
+            <button
+              onClick={() => { setGpsMode(m => !m); setSelectedStagingPin(null); }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm border transition-all ${
+                gpsMode
+                  ? 'bg-orange-500 border-orange-500 text-white shadow-lg'
+                  : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-orange-400 hover:border-orange-500/50'
+              }`}
+            >
+              <MapPin className="w-4 h-4" />
+              <span className="hidden sm:inline">{gpsMode ? 'Exit Assign' : 'Assign GPS'}</span>
+              {!gpsMode && stagingUnassignedCount > 0 && (
+                <span className="bg-orange-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                  {stagingUnassignedCount}
+                </span>
+              )}
+            </button>
+          )}
+
           <select
             value={mapStyle}
             onChange={e => setMapStyle(e.target.value as MapStyle)}
@@ -372,18 +606,39 @@ export default function GISCommandCentre() {
           selectedShop={selectedShop}
           onShopClick={setSelectedShop}
           onClosePopup={() => setSelectedShop(null)}
+          stagingPins={gpsMode ? stagingPins : undefined}
+          selectedStagingPin={selectedStagingPin}
+          onStagingPinClick={(pin) => { setSelectedStagingPin(pin); setAssignTarget(''); setSearchQuery(''); }}
         />
 
         {/* Legend (outside MapCanvas so it doesn't get z-index issues) */}
         <LegendCard view={mapView} />
 
-        {/* Spatial Intelligence panel */}
-        <SpatialPanel
-          shops={filteredShops}
-          agents={agents}
-          open={panelOpen}
-          onToggle={() => setPanelOpen(o => !o)}
-        />
+        {/* Panel: GPS Assignment or Spatial Intelligence */}
+        {gpsMode ? (
+          <GpsAssignPanel
+            stagingPins={stagingPins}
+            unmappedShops={unmappedShops}
+            selectedPin={selectedStagingPin}
+            assignTarget={assignTarget}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            onSelectTarget={setAssignTarget}
+            onAssign={handleAssign}
+            onSkip={() => { setSelectedStagingPin(null); setAssignTarget(''); }}
+            onPinSelect={(pin) => { setSelectedStagingPin(pin); setAssignTarget(''); setSearchQuery(''); }}
+            isSaving={isSaving}
+            open={panelOpen}
+            onToggle={() => setPanelOpen(o => !o)}
+          />
+        ) : (
+          <SpatialPanel
+            shops={filteredShops}
+            agents={agents}
+            open={panelOpen}
+            onToggle={() => setPanelOpen(o => !o)}
+          />
+        )}
       </div>
     </div>
   );
