@@ -243,10 +243,11 @@ export default function DashboardPage() {
       const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
       const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-      // Active agents
+      // Active agents — Workstream A only (shared DB includes WS-B notoEnviro users)
       const { count: agentCount } = await supabase
         .from('users')
         .select('id', { count: 'exact', head: true })
+        .eq('workstream', 'A')
         .eq('is_active', true);
 
       // Total assessments

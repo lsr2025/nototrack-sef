@@ -413,6 +413,7 @@ export default function GISCommandCentre() {
         .not('gps_lng', 'is', null),
       supabase.from('users')
         .select('id, full_name, municipality')
+        .eq('workstream', 'A')
         .limit(200),
       supabase.from('users').select('role_tier').eq('id', session.user.id).single(),
     ]);
