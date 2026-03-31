@@ -393,20 +393,20 @@ export default function GISCommandCentre() {
 
   // GPS Assignment Mode
   const [gpsMode, setGpsMode]                     = useState(false);
-  const [stagingPins, setStagingPins]             = useState<StagingPin[]>([]);
+  const [allGpsPins, setAllGpsPins]               = useState<StagingPin[]>([]);
+  const [assignedPinIds, setAssignedPinIds]       = useState<Set<string>>(new Set());
   const [unmappedShops, setUnmappedShops]         = useState<UnmappedShop[]>([]);
   const [selectedStagingPin, setSelectedStagingPin] = useState<StagingPin | null>(null);
   const [assignTarget, setAssignTarget]           = useState<string>('');
   const [searchQuery, setSearchQuery]             = useState('');
   const [isSaving, setIsSaving]                   = useState(false);
   const [user, setUser]                           = useState<{ role_tier?: number } | null>(null);
-  const [stagingUnassignedCount, setStagingUnassignedCount] = useState(0);
 
   const fetchData = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) { router.push('/'); return; }
 
-    const [shopsRes, agentsRes, stagingCountRes, userRes] = await Promise.all([
+    const [shopsRes, agentsRes, userRes] = await Promise.all([
       supabase.from('assessments')
         .select('id, shop_name, owner_name, municipality, ward_no, gps_lat, gps_lng, compliance_score, compliance_tier, status')
         .not('gps_lat', 'is', null)
@@ -414,31 +414,29 @@ export default function GISCommandCentre() {
       supabase.from('users')
         .select('id, full_name, municipality')
         .limit(200),
-      supabase.from('gps_staging').select('id', { count: 'exact', head: true }).is('assigned_to', null),
       supabase.from('users').select('role_tier').eq('id', session.user.id).single(),
     ]);
 
     if (shopsRes.data) setShops(shopsRes.data as ShopPin[]);
     if (agentsRes.data) setAgents(agentsRes.data as AgentRow[]);
-    if (stagingCountRes.count != null) setStagingUnassignedCount(stagingCountRes.count);
     if (userRes.data) setUser(userRes.data);
     setLoading(false);
   }, [supabase, router]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  // Fetch GPS staging data when gpsMode activates
+  // Load GPS pins from static JSON + unmapped shops when GPS mode activates
   useEffect(() => {
     if (!gpsMode) return;
     async function fetchGpsData() {
-      const [stagingRes, unmappedRes] = await Promise.all([
-        supabase.from('gps_staging').select('*').is('assigned_to', null),
+      const [pinsRes, unmappedRes] = await Promise.all([
+        fetch('/gps-pins.json').then(r => r.json()),
         supabase.from('assessments')
           .select('id, shop_name, municipality, ward_no, compliance_score, compliance_tier')
           .is('gps_lat', null)
           .order('shop_name'),
       ]);
-      if (stagingRes.data) setStagingPins(stagingRes.data as StagingPin[]);
+      setAllGpsPins(pinsRes as StagingPin[]);
       if (unmappedRes.data) setUnmappedShops(unmappedRes.data as UnmappedShop[]);
     }
     fetchGpsData();
@@ -451,16 +449,11 @@ export default function GISCommandCentre() {
       await supabase.from('assessments')
         .update({ gps_lat: selectedStagingPin.lat, gps_lng: selectedStagingPin.lng })
         .eq('id', assignTarget);
-      await supabase.from('gps_staging')
-        .update({ assigned_to: assignTarget, assigned_at: new Date().toISOString() })
-        .eq('id', selectedStagingPin.id);
-      // Refresh local state
-      setStagingPins(prev => prev.filter(p => p.id !== selectedStagingPin.id));
+      // Mark pin as assigned locally
+      setAssignedPinIds(prev => new Set([...prev, selectedStagingPin.id]));
       setUnmappedShops(prev => prev.filter(s => s.id !== assignTarget));
       setSelectedStagingPin(null);
       setAssignTarget('');
-      setStagingUnassignedCount(c => Math.max(0, c - 1));
-      // Refresh mapped shops
       fetchData();
     } finally {
       setIsSaving(false);
@@ -545,9 +538,9 @@ export default function GISCommandCentre() {
             >
               <MapPin className="w-4 h-4" />
               <span className="hidden sm:inline">{gpsMode ? 'Exit Assign' : 'Assign GPS'}</span>
-              {!gpsMode && stagingUnassignedCount > 0 && (
+              {!gpsMode && (
                 <span className="bg-orange-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
-                  {stagingUnassignedCount}
+                  {allGpsPins.length > 0 ? allGpsPins.length - assignedPinIds.size : 138}
                 </span>
               )}
             </button>
@@ -606,7 +599,7 @@ export default function GISCommandCentre() {
           selectedShop={selectedShop}
           onShopClick={setSelectedShop}
           onClosePopup={() => setSelectedShop(null)}
-          stagingPins={gpsMode ? stagingPins : undefined}
+          stagingPins={gpsMode ? allGpsPins.filter(p => !assignedPinIds.has(p.id)) : undefined}
           selectedStagingPin={selectedStagingPin}
           onStagingPinClick={(pin) => { setSelectedStagingPin(pin); setAssignTarget(''); setSearchQuery(''); }}
         />
@@ -617,7 +610,7 @@ export default function GISCommandCentre() {
         {/* Panel: GPS Assignment or Spatial Intelligence */}
         {gpsMode ? (
           <GpsAssignPanel
-            stagingPins={stagingPins}
+            stagingPins={allGpsPins.filter(p => !assignedPinIds.has(p.id))}
             unmappedShops={unmappedShops}
             selectedPin={selectedStagingPin}
             assignTarget={assignTarget}

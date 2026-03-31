@@ -31,11 +31,11 @@ export interface StagingPin {
   lat: number;
   lng: number;
   shop_hint: string;
-  ward_hint: string;
-  municipality_hint: string;
+  ward_hint?: string | null;
+  municipality_hint?: string | null;
   raw_context: string;
   match_score: number;
-  assigned_to: string | null;
+  assigned_to?: string | null;
 }
 
 export type MapView = 'pins' | 'heat' | 'wards';
@@ -226,7 +226,7 @@ export default function MapCanvas({
           />
         ))}
 
-        {stagingPins && stagingPins.filter(p => !p.assigned_to).map(pin => (
+        {stagingPins && stagingPins.map(pin => (
           <Marker
             key={pin.id}
             position={[pin.lat, pin.lng]}
