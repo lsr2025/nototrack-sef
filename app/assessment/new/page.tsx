@@ -1635,104 +1635,104 @@ export default function AssessmentWizardPage() {
       ]);
 
       const payload = {
-        agent_id: agentId,
-        shop_name: form.shop_name,
-        owner_name: form.owner_name,
-        email: form.email || null,
-        contact: form.contact || null,
-        address: form.address || null,
-        municipality: form.municipality || null,
-        ward_no: form.ward_no || null,
-        gps_lat: form.gps_lat,
-        gps_lng: form.gps_lng,
+        // Identity — use actual DB column names
+        shop_name:        form.shop_name,
+        owner_name:       form.owner_name,
+        owner_email:      form.email || null,
+        contact_number:   form.contact || null,
+        address:          form.address || null,
+        municipality:     form.municipality || null,
+        ward_no:          form.ward_no || null,
+        gps_lat:          form.gps_lat,
+        gps_lng:          form.gps_lng,
+        fieldworker_name: user?.full_name || null,
 
-        is_registered: form.is_registered,
-        cipc_number: form.cipc_number || null,
-        has_bank_account: form.has_bank_account_s2,
-        bank_name: form.bank_name_s2 || null,
-        has_coa: form.has_coa,
-        coa_number: form.coa_number || null,
+        // Registration
+        is_cipc_registered: form.is_registered,
+        cipc_number:        form.cipc_number || null,
+        has_bank_account:   form.has_bank_account_s2,
+        bank_name:          form.bank_name_s2 || null,
+        has_coa:            form.has_coa,
+        coa_number:         form.coa_number || null,
 
+        // Infrastructure
         years_operating: form.years_operating || null,
-        structure_type: form.structure_type || null,
-        store_size: form.store_size || null,
-        storage: form.storage.length > 0 ? form.storage : null,
-        products: form.products.length > 0 ? form.products : null,
+        structure_type:  form.structure_type || null,
+        store_size:      form.store_size || null,
+        storage:         form.storage.length > 0 ? form.storage : null,
+        products:        form.products.length > 0 ? form.products : null,
 
+        // Hygiene
         cleanliness_ok: form.cleanliness_ok,
-        no_dust: form.no_dust,
-        handwashing: form.handwashing,
-        no_animals: form.no_animals,
-        waste_ok: form.waste_ok,
-        hygiene_other: form.hygiene_other || null,
+        no_dust:        form.no_dust,
+        handwashing:    form.handwashing,
+        no_animals:     form.no_animals,
+        waste_ok:       form.waste_ok,
 
-        food_on_floor: form.food_on_floor,
-        expired_food: form.expired_food,
-        food_labelled: form.food_labelled,
+        // Food safety — DB stores as "not on floor / no expired" (inverted)
+        food_not_on_floor:    form.food_on_floor === true  ? false
+                            : form.food_on_floor === false ? true : null,
+        no_expired_food:      form.expired_food === true  ? false
+                            : form.expired_food === false ? true : null,
+        food_labelled:          form.food_labelled,
         food_nonfood_separated: form.food_nonfood_separated,
-        food_safety_other: form.food_safety_other || null,
 
-        lighting_ok: form.lighting_ok,
-        floors_ok: form.floors_ok,
-        cleaning_materials: form.cleaning_materials,
-        safety_signage: form.safety_signage,
+        // Safety
+        lighting_ok:          form.lighting_ok,
+        floors_ok:            form.floors_ok,
+        cleaning_materials:   form.cleaning_materials,
+        safety_signage:       form.safety_signage,
         disability_accessible: form.disability_accessible,
-        not_sleeping_space: form.not_sleeping_space,
-        yms_observations: form.yms_observations || null,
+        not_sleeping_space:   form.not_sleeping_space,
+        yms_observations:     form.yms_observations || null,
 
-        payment_methods: form.payment_methods,
-        has_pos: form.has_pos,
-        ordering_methods: form.ordering_methods,
+        // Business
+        payment_methods:  form.payment_methods,
+        has_pos:          form.has_pos,
+        ordering_method:  Array.isArray(form.ordering_methods)
+                            ? (form.ordering_methods[0] || null)
+                            : (form.ordering_methods || null),
         makes_deliveries: form.makes_deliveries,
-        click_collect: form.click_collect,
-        collection_point: form.collection_point,
-        space_security: form.space_security,
+        click_collect:    form.click_collect,
+        collect_method:   Array.isArray(form.collection_point)
+                            ? (form.collection_point[0] || null)
+                            : (form.collection_point || null),
+        space_security:   form.space_security,
         monthly_turnover: form.monthly_turnover || null,
-        num_employees: form.num_employees ? parseInt(form.num_employees) : null,
-        support_needed: form.support_needed,
+        num_employees:    form.num_employees ? parseInt(form.num_employees) : null,
+        support_needed:   form.support_needed,
 
-        sa_citizen: form.sa_citizen,
-        registered_cipc_nef: form.registered_cipc_nef,
-        willing_bank: form.willing_bank_nef,
-        willing_sars: form.willing_sars,
-        valid_coa_nef: form.valid_coa_nef,
-        fixed_structure: form.fixed_structure,
-        in_operation_6m: form.in_operation_6m,
+        // NEF eligibility
+        sa_citizen:       form.sa_citizen,
+        willing_bank:     form.willing_bank_nef,
+        willing_sars:     form.willing_sars,
+        valid_coa_nef:    form.valid_coa_nef,
+        fixed_structure:  form.fixed_structure,
+        in_operation_6m:  form.in_operation_6m,
         hygiene_compliant: form.hygiene_compliant,
         willing_training: form.willing_training,
         growth_potential: form.growth_potential,
 
-        additional_notes: form.additional_notes || null,
-
-        photo_front_url: photoFrontUrl,
-        photo_interior_url: photoInteriorUrl,
-        photo_id_url: photoIdUrl,
-        doc_coa_url: docCoaUrl,
-        doc_bank_url: docBankUrl,
-        doc_other_url: docOtherUrl,
-        agent_signature: form.agent_signature || null,
-        owner_signature: form.owner_signature || null,
-        declaration_agreed: form.declaration_agreed,
-
+        // Scores
         compliance_score: score,
-        compliance_tier: tier.tier,
+        compliance_tier:  tier.tier,
         nef_score: [
-          form.sa_citizen, form.registered_cipc_nef, form.willing_bank_nef,
+          form.sa_citizen, form.is_registered, form.willing_bank_nef,
           form.willing_sars, form.valid_coa_nef, form.fixed_structure,
           form.in_operation_6m, form.hygiene_compliant, form.willing_training,
           form.growth_potential,
         ].filter(Boolean).length,
         status: 'submitted',
-        created_at: new Date().toISOString(),
-        synced_at: new Date().toISOString(),
       };
 
-      await supabase.from('assessments').insert([payload]);
+      const { error: insertError } = await supabase.from('assessments').insert([payload]);
+      if (insertError) throw new Error(insertError.message);
 
       setFinalScore(score);
       setSubmitted(true);
     } catch (err) {
       console.error('Submit error:', err);
+      alert(`Submission failed: ${err instanceof Error ? err.message : 'Unknown error'}. Please try again.`);
     } finally {
       setIsSubmitting(false);
     }
